@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Conda / virtual env
+.venv/
+venv/
+envs/
+
+# Large data and outputs
+data/
+outputs/
+*.ply
+*.ckpt
+*.pth
+*.pt
+*.bin
+*.mp4
+*.mov
+*.avi
+*.zip
+*.tar
+*.tar.gz
+
+# Cache
+.hf_cache/
+.torch/
+.pip_cache/
+.cache/
+wandb/
+
+# OS files
+.DS_Store
+Thumbs.db
