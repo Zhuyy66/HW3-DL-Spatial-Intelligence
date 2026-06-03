@@ -7,6 +7,23 @@ Member B owns this track.
 - Environment: `env_hw3_robot`, Python 3.12.
 - GPU-ready stack: `torch==2.6.0`, CUDA 12.4, `torchcodec==0.2.0`,
   `lerobot==0.4.0`.
+- Current known failure mode: conda may solve PyTorch from conda-forge as a CPU
+  build. Use channel-qualified `pytorch::` packages or the pip CUDA wheel
+  fallback from `env/env_hw3_robot_setup.md`.
+- Torch build check:
+
+```bash
+python - <<'PY' 2>&1 | tee logs/day1_torch_build_check_$(date +%Y%m%d_%H%M%S).log
+import torch
+print("torch", torch.__version__)
+print("torch.version.cuda", torch.version.cuda)
+print("cuda_available", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("device_count", torch.cuda.device_count())
+    print("device0", torch.cuda.get_device_name(0))
+PY
+```
+
 - Verification command:
 
 ```bash
