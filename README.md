@@ -22,3 +22,13 @@ topic2_act/        # Topic 2: LeRobot + ACT + CALVIN
 env/               # Environment configuration files
 reports/           # Report source files and figures
 assets/            # Small public assets
+```
+
+## Day 1 Topic 2 Notes
+
+Member B uses `env_hw3_robot` for LeRobot ACT training. The server setup and
+verification commands are documented in `env/env_hw3_robot_setup.md`.
+
+The assignment PDF points to the course dataset
+`huiwon/calvin_task_ABC_D`. Probe metadata first before downloading the full
+dataset.

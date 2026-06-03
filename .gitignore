@@ -11,6 +11,7 @@ envs/
 # Large data and outputs
 data/
 outputs/
+checkpoints/
 *.ply
 *.ckpt
 *.pth
@@ -29,6 +30,13 @@ outputs/
 .pip_cache/
 .cache/
 wandb/
+runs/
+logs/
+*.log
+
+# Local course materials and planning exports
+md/
+pdf/
 
 # OS files
 .DS_Store
