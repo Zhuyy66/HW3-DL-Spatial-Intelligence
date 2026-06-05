@@ -5,16 +5,18 @@ Member B owns this track.
 ## Day 1 Checklist
 
 - Environment: `env_hw3_robot`, Python 3.12.
-- GPU-ready stack: `torch==2.6.0`, CUDA 12.4, `torchcodec==0.2.0`,
-  `lerobot==0.4.0`.
-- Current known failure mode: conda may solve PyTorch from conda-forge as a CPU
-  build. Use channel-qualified `pytorch::` packages or the pip CUDA wheel
-  fallback from `env/env_hw3_robot_setup.md`.
+- GPU-ready stack: `torch==2.6.0+cu118`, `torchvision==0.21.0+cu118`,
+  `torchaudio==2.6.0+cu118`, `torchcodec==0.2.1`, `lerobot==0.4.0`.
+- Current known failure mode: CUDA 12.4 PyTorch wheels trigger CUDA error 804
+  on the server's 535 driver. Use the CUDA 11.8 wheel rebuild from
+  `env/env_hw3_robot_setup.md`.
 - Torch build check:
 
 ```bash
-python - <<'PY' 2>&1 | tee logs/day1_torch_build_check_$(date +%Y%m%d_%H%M%S).log
+python - <<'PY' 2>&1 | tee logs/day1_torch_build_check.log
+import os
 import torch
+print("CUDA_VISIBLE_DEVICES", os.environ.get("CUDA_VISIBLE_DEVICES"))
 print("torch", torch.__version__)
 print("torch.version.cuda", torch.version.cuda)
 print("cuda_available", torch.cuda.is_available())
@@ -28,7 +30,7 @@ PY
 
 ```bash
 python topic2_act/scripts/verify_act_import.py --require-cuda \
-  2>&1 | tee logs/day1_verify_act_import_$(date +%Y%m%d_%H%M%S).log
+  2>&1 | tee logs/day1_verify_act_import.log
 ```
 
 ## Dataset Plan
@@ -55,15 +57,22 @@ python topic2_act/scripts/probe_calvin_dataset.py \
   --repo-id huiwon/calvin_task_ABC_D \
   --local-dir /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_probe \
   --max-meta-files 50 \
-  2>&1 | tee logs/day1_probe_calvin_dataset_$(date +%Y%m%d_%H%M%S).log
+  2>&1 | tee logs/day1_probe_calvin_dataset.log
 ```
 
 ## Logging Rule
 
 Use `2>&1 | tee logs/name.log` for setup, verification, and dataset probes,
 because these commands should remain visible in the terminal while preserving
-logs for later review. Use `> logs/name.log 2>&1 &` only for long background
-jobs such as training.
+logs for later review. Use stable log filenames and let reruns overwrite the
+previous output. If a previous log must be retained, copy it before rerunning:
+
+```bash
+mkdir -p logs/archive
+cp logs/day1_verify_act_import.log logs/archive/day1_verify_act_import_v1.log
+```
+
+Use `> logs/name.log 2>&1 &` only for long background jobs such as training.
 
 ## Day 2 Output Target
 

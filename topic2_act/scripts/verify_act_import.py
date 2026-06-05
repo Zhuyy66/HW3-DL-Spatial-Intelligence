@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import os
 import shutil
 import subprocess
 import sys
@@ -66,13 +67,35 @@ def check_ffmpeg() -> None:
     print(f"ok: {first_line}")
 
 
+def check_cuda(torch) -> bool:
+    print(f"torch.version.cuda: {torch.version.cuda}")
+    print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
+
+    try:
+        cuda_available = bool(torch.cuda.is_available())
+    except Exception as exc:  # noqa: BLE001 - smoke test should expose CUDA init errors.
+        print(f"torch.cuda.is_available error: {exc!r}")
+        cuda_available = False
+
+    print(f"torch.cuda.is_available: {cuda_available}")
+
+    try:
+        device_count = int(torch.cuda.device_count())
+        print(f"torch.cuda.device_count: {device_count}")
+        if device_count > 0:
+            print(f"torch.cuda.device0: {torch.cuda.get_device_name(0)}")
+    except Exception as exc:  # noqa: BLE001 - CUDA diagnostics should continue after errors.
+        print(f"torch.cuda.device_count error: {exc!r}")
+
+    return cuda_available
+
+
 def main() -> int:
     args = parse_args()
 
     torch = import_required_module("torch")
     print(f"torch: {torch.__version__}")
-    cuda_available = bool(torch.cuda.is_available())
-    print(f"torch.cuda.is_available: {cuda_available}")
+    cuda_available = check_cuda(torch)
     if args.require_cuda and not cuda_available:
         raise RuntimeError("CUDA is required but torch.cuda.is_available() is false")
 
