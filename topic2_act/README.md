@@ -65,6 +65,7 @@ Probe command:
 python topic2_act/scripts/probe_calvin_dataset.py \
   --repo-id huiwon/calvin_task_ABC_D \
   --endpoint https://hf-mirror.com \
+  --revision main \
   --local-dir /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_probe \
   --max-meta-files 50 \
   2>&1 | tee logs/day1_probe_calvin_dataset.log

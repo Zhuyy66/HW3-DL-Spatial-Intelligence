@@ -146,10 +146,15 @@ python topic2_act/scripts/verify_act_import.py --require-cuda \
 python topic2_act/scripts/probe_calvin_dataset.py \
   --repo-id huiwon/calvin_task_ABC_D \
   --endpoint https://hf-mirror.com \
+  --revision main \
   --local-dir /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_probe \
   --max-meta-files 50 \
   2>&1 | tee logs/day1_probe_calvin_dataset.log
 ```
+
+If `day1_verify_act_import.log` already ends with
+`ok: env_hw3_robot smoke test passed`, rerun only the probe command above after
+sourcing the CUDA driver shim.
 
 Pass criteria:
 
