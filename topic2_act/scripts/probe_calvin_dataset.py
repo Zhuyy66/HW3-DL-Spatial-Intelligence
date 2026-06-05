@@ -8,13 +8,16 @@ files and one parquet episode only.
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import os
 from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
-from huggingface_hub import HfApi, hf_hub_download
+
+
+DEFAULT_HF_ENDPOINT = "https://hf-mirror.com"
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,6 +29,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--repo-type", default="dataset")
     parser.add_argument("--max-meta-files", type=int, default=50)
+    parser.add_argument(
+        "--endpoint",
+        default=os.environ.get("HF_ENDPOINT") or DEFAULT_HF_ENDPOINT,
+        help="Hugging Face endpoint. Defaults to HF_ENDPOINT or hf-mirror.com.",
+    )
     return parser.parse_args()
 
 
@@ -69,13 +77,17 @@ def print_parquet_schema(path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    endpoint = os.environ.get("HF_ENDPOINT") or None
-    api = HfApi(endpoint=endpoint) if endpoint else HfApi()
+    endpoint = args.endpoint.rstrip("/") if args.endpoint else DEFAULT_HF_ENDPOINT
+    os.environ["HF_ENDPOINT"] = endpoint
+    from huggingface_hub import HfApi, hf_hub_download
+
+    api = HfApi(endpoint=endpoint)
     local_dir = Path(args.local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
 
     files = api.list_repo_files(args.repo_id, repo_type=args.repo_type)
     print(f"repo: {args.repo_id}")
+    print(f"endpoint: {endpoint}")
     print(f"file_count: {len(files)}")
 
     top_level = sorted({name.split("/")[0] for name in files if "/" in name})
@@ -94,12 +106,15 @@ def main() -> int:
 
     downloaded: list[Path] = []
     for filename in selected:
-        path = hf_hub_download(
-            repo_id=args.repo_id,
-            filename=filename,
-            repo_type=args.repo_type,
-            local_dir=str(local_dir),
-        )
+        download_kwargs = {
+            "repo_id": args.repo_id,
+            "filename": filename,
+            "repo_type": args.repo_type,
+            "local_dir": str(local_dir),
+        }
+        if "endpoint" in inspect.signature(hf_hub_download).parameters:
+            download_kwargs["endpoint"] = endpoint
+        path = hf_hub_download(**download_kwargs)
         downloaded.append(Path(path))
         print(f"downloaded: {filename}")
 

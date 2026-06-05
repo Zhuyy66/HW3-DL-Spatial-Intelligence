@@ -10,6 +10,15 @@ Member B owns this track.
 - Current known failure mode: CUDA 12.4 PyTorch wheels trigger CUDA error 804
   on the server's 535 driver. Use the CUDA 11.8 wheel rebuild from
   `env/env_hw3_robot_setup.md`.
+- If CUDA error 804 persists with `cu118`, source the project driver shim before
+  verification so PyTorch loads the real host `libcuda.so.1` instead of CUDA
+  compat/stubs libraries:
+
+```bash
+source scripts/activate_cuda_driver_shim.sh 6 \
+  > >(tee logs/day1_cuda_driver_shim.log) 2>&1
+```
+
 - Torch build check:
 
 ```bash
@@ -55,6 +64,7 @@ Probe command:
 ```bash
 python topic2_act/scripts/probe_calvin_dataset.py \
   --repo-id huiwon/calvin_task_ABC_D \
+  --endpoint https://hf-mirror.com \
   --local-dir /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_probe \
   --max-meta-files 50 \
   2>&1 | tee logs/day1_probe_calvin_dataset.log

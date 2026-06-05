@@ -14,6 +14,9 @@ commands on the Linux GPU server, not on Windows.
 - Default logs use stable filenames and are overwritten on each rerun. Copy a
   log into `logs/archive/` with a version suffix only when a historical backup
   is needed.
+- Source `scripts/activate_cuda_driver_shim.sh` before CUDA checks. The server
+  container can expose CUDA compat/stubs paths that trigger CUDA error 804 even
+  when the PyTorch wheel version is compatible.
 
 ## Environment Variables
 
@@ -40,6 +43,32 @@ Then prepare cache directories:
 source ~/.bashrc
 mkdir -p "$HF_HOME" "$TORCH_HOME" "$PIP_CACHE_DIR" "$HW3_ROOT/.conda_pkgs" "$HW3_ROOT/logs"
 conda config --add pkgs_dirs "$HW3_ROOT/.conda_pkgs"
+```
+
+## CUDA Driver Shim
+
+Run this after activating `env_hw3_robot` and before any PyTorch CUDA command.
+The optional argument selects the physical GPU exposed as logical device 0.
+Member B should use GPU 6 by default unless it is occupied.
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+conda activate env_hw3_robot
+source scripts/activate_cuda_driver_shim.sh 6 \
+  > >(tee logs/day1_cuda_driver_shim.log) 2>&1
+```
+
+If the script cannot locate the real driver, find it manually and rerun:
+
+```bash
+find /usr /lib /run/nvidia/driver \
+  -path '*/compat/*' -prune -o \
+  -path '*/stubs/*' -prune -o \
+  -type f -name 'libcuda.so.*' -print 2>/dev/null
+
+export REAL_CUDA_DRIVER=/path/to/libcuda.so.535.129.03
+source scripts/activate_cuda_driver_shim.sh 6 \
+  > >(tee logs/day1_cuda_driver_shim.log) 2>&1
 ```
 
 ## Clean Rebuild env_hw3_robot
@@ -89,9 +118,15 @@ EOF
 
 ## Verification
 
+If `logs/day1_rebuild_env_hw3_robot.log` already ends with
+`No broken requirements found.`, do not rebuild again. Source the CUDA driver
+shim and rerun only the verification commands below.
+
 ```bash
 conda activate env_hw3_robot
 cd /root/Test/Zhr/DL/HW3
+source scripts/activate_cuda_driver_shim.sh 6 \
+  > >(tee logs/day1_cuda_driver_shim.log) 2>&1
 
 python - <<'PY' 2>&1 | tee logs/day1_torch_build_check.log
 import os
@@ -110,6 +145,7 @@ python topic2_act/scripts/verify_act_import.py --require-cuda \
 
 python topic2_act/scripts/probe_calvin_dataset.py \
   --repo-id huiwon/calvin_task_ABC_D \
+  --endpoint https://hf-mirror.com \
   --local-dir /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_probe \
   --max-meta-files 50 \
   2>&1 | tee logs/day1_probe_calvin_dataset.log
@@ -121,6 +157,7 @@ Pass criteria:
 - `torch` is `2.6.0+cu118`
 - `torch.version.cuda` is not `None`
 - `torch.cuda.is_available: True`
+- `day1_cuda_driver_shim.log` shows a non-compat `libcuda.so.1` path
 - `ACTPolicy imported`
 - `torchcodec` imports
 - `ffmpeg -version` succeeds

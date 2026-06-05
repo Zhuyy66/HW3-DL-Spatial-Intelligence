@@ -70,6 +70,8 @@ def check_ffmpeg() -> None:
 def check_cuda(torch) -> bool:
     print(f"torch.version.cuda: {torch.version.cuda}")
     print(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES')}")
+    ld_entries = [entry for entry in os.environ.get("LD_LIBRARY_PATH", "").split(":") if entry]
+    print(f"LD_LIBRARY_PATH first entries: {ld_entries[:6]}")
 
     try:
         cuda_available = bool(torch.cuda.is_available())
