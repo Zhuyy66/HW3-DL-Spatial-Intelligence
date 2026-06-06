@@ -1,0 +1,70 @@
+# Day 2 Topic2 ACT baseline configuration for CALVIN LeRobot shards.
+#
+# Network architecture fields are intentionally inherited from the installed
+# lerobot==0.4.0 ACTConfig defaults. Generate the exact server-side default dump
+# with:
+#   python topic2_act/scripts/audit_calvin_dataset.py --inspect-lerobot-act-defaults \
+#     --output-act-dump topic2_act/configs/act_default_v0.4.0.dump.txt
+
+project:
+  name: hw3-topic2
+  task: calvin_task_ABC_D
+  policy: act
+  owner: member_b
+
+dataset:
+  repo_id: huiwon/calvin_task_ABC_D
+  shard_name: calvin_task_ABC_D_lerobot_0_4
+  observed_codebase_version: v2.1
+  training_loader_note: confirm v2.1 support or convert to LeRobot v3.0 before direct lerobot==0.4.0 training
+  local_root: /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_first_shard/calvin_task_ABC_D_lerobot_0_4
+  split_root: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4
+  a_only_episodes: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_A.json
+  abc_episodes: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_ABC.json
+  d_episodes: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_D.json
+  fps: 30
+  observation_state_key: observation.state
+  action_key: action
+  image_keys:
+    - observation.images.image
+    - observation.images.wrist_image
+  task_key: annotation.human.action.task_description
+  env_label_source: episodes_stats.original_frame_idx + fixed task_ABC_D scene_info.npy
+
+policy:
+  type: act
+  lerobot_version: 0.4.0
+  inherit_act_config_defaults: true
+  defaults_dump: topic2_act/configs/act_default_v0.4.0.dump.txt
+  chunk_size: 100
+  n_action_steps: 100
+
+optimization:
+  optimizer: adamw
+  learning_rate: 1.0e-5
+  weight_decay: 1.0e-4
+  batch_size: 8
+  epochs: 50
+  smoke_test_epochs: 5
+  seed: 20260529
+  gradient_clip_norm: 10.0
+
+logging:
+  backend: wandb
+  project: hw3-topic2
+  log_freq: 100
+  save_freq: 1
+  output_dir: /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin
+
+training_variants:
+  a_only:
+    episodes_file: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_A.json
+    run_name: act_calvin_a_only
+  abc_joint:
+    episodes_file: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_ABC.json
+    run_name: act_calvin_abc_joint
+
+guards:
+  do_not_infer_env_from_episode_order: true
+  do_not_copy_large_dataset_files_for_split: true
+  require_scene_info_label_validation: true

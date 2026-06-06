@@ -1,0 +1,301 @@
+{
+  "generated_at": "2026-06-06T05:58:46.446715+00:00",
+  "dataset_root": "/root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_first_shard/calvin_task_ABC_D_lerobot_0_4",
+  "dataset_name": "calvin_task_ABC_D_lerobot_0_4",
+  "features": {
+    "codebase_version": "v2.1",
+    "robot_type": "franka",
+    "total_episodes": 4468,
+    "total_frames": 267682,
+    "total_tasks": 388,
+    "fps": 30,
+    "state": {
+      "dtype": "float32",
+      "shape": [
+        15
+      ]
+    },
+    "action": {
+      "dtype": "float32",
+      "shape": [
+        7
+      ]
+    },
+    "cameras": {
+      "observation.images.image": {
+        "dtype": "video",
+        "shape": [
+          256,
+          256,
+          3
+        ],
+        "names": [
+          "height",
+          "width",
+          "channels"
+        ],
+        "info": {
+          "video.height": 256,
+          "video.width": 256,
+          "video.codec": "av1",
+          "video.pix_fmt": "yuv420p",
+          "video.is_depth_map": false,
+          "video.fps": 30,
+          "video.channels": 3,
+          "has_audio": false
+        }
+      },
+      "observation.images.wrist_image": {
+        "dtype": "video",
+        "shape": [
+          256,
+          256,
+          3
+        ],
+        "names": [
+          "height",
+          "width",
+          "channels"
+        ],
+        "info": {
+          "video.height": 256,
+          "video.width": 256,
+          "video.codec": "av1",
+          "video.pix_fmt": "yuv420p",
+          "video.is_depth_map": false,
+          "video.fps": 30,
+          "video.channels": 3,
+          "has_audio": false
+        }
+      }
+    },
+    "action_modality": {
+      "eef_pos_delta": {
+        "start": 0,
+        "end": 3,
+        "absolute": false
+      },
+      "eef_rot_delta": {
+        "start": 3,
+        "end": 6,
+        "absolute": false,
+        "rotation_type": "euler_angles_rpy"
+      },
+      "gripper_close": {
+        "start": 6,
+        "end": 7
+      }
+    },
+    "video_modality": {
+      "image": {
+        "original_key": "observation.images.image"
+      },
+      "wrist_image": {
+        "original_key": "observation.images.wrist_image"
+      }
+    }
+  },
+  "format_warnings": [
+    "Dataset metadata is LeRobot codebase v2.1. Day 2 metadata audit and episode-list splitting are valid, but direct training with lerobot==0.4.0 may require confirming the v2.1 loader path or converting to v3.0."
+  ],
+  "explicit_env_field_candidates": [],
+  "episodes_jsonl_count": 4468,
+  "episodes_stats_jsonl_count": 4468,
+  "parquet_probe": {
+    "available": true,
+    "path": "/root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_first_shard/calvin_task_ABC_D_lerobot_0_4/data/chunk-000/episode_000000.parquet",
+    "rows": 43,
+    "columns": [
+      {
+        "name": "observation.state",
+        "dtype": "object",
+        "sample_type": "ndarray",
+        "sample_shape": [
+          15
+        ]
+      },
+      {
+        "name": "action",
+        "dtype": "object",
+        "sample_type": "ndarray",
+        "sample_shape": [
+          7
+        ]
+      },
+      {
+        "name": "annotation.human.action.task_description",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "original_frame_idx",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "timestamp",
+        "dtype": "float32",
+        "sample_type": "float32",
+        "sample_shape": []
+      },
+      {
+        "name": "frame_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "episode_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "task_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      }
+    ]
+  },
+  "scene_info": "/root/Test/Zhr/DL/HW3/topic2_act/data/scene_info_fix/training/scene_info.npy",
+  "labels": {
+    "scene_ranges": [
+      {
+        "name": "calvin_scene_B",
+        "label": "B",
+        "start": 0,
+        "end": 598909
+      },
+      {
+        "name": "calvin_scene_C",
+        "label": "C",
+        "start": 598910,
+        "end": 1191338
+      },
+      {
+        "name": "calvin_scene_A",
+        "label": "A",
+        "start": 1191339,
+        "end": 1795044
+      }
+    ],
+    "validation": {
+      "counts": {
+        "A": 1551,
+        "B": 1482,
+        "C": 1435
+      },
+      "scene_frame_min": 0,
+      "scene_frame_max": 1795044,
+      "dataset_frame_min": 805,
+      "dataset_frame_max": 1794868,
+      "order_runs": {
+        "run_count": 2929,
+        "transitions": 2928,
+        "longest_run": 10,
+        "first_runs": [
+          {
+            "env": "A",
+            "length": 1,
+            "start_episode": 0,
+            "end_episode": 0
+          },
+          {
+            "env": "B",
+            "length": 1,
+            "start_episode": 1,
+            "end_episode": 1
+          },
+          {
+            "env": "C",
+            "length": 2,
+            "start_episode": 2,
+            "end_episode": 3
+          },
+          {
+            "env": "A",
+            "length": 1,
+            "start_episode": 4,
+            "end_episode": 4
+          },
+          {
+            "env": "C",
+            "length": 1,
+            "start_episode": 5,
+            "end_episode": 5
+          },
+          {
+            "env": "B",
+            "length": 2,
+            "start_episode": 6,
+            "end_episode": 7
+          },
+          {
+            "env": "C",
+            "length": 2,
+            "start_episode": 8,
+            "end_episode": 9
+          },
+          {
+            "env": "B",
+            "length": 1,
+            "start_episode": 10,
+            "end_episode": 10
+          },
+          {
+            "env": "C",
+            "length": 1,
+            "start_episode": 11,
+            "end_episode": 11
+          },
+          {
+            "env": "A",
+            "length": 3,
+            "start_episode": 12,
+            "end_episode": 14
+          }
+        ]
+      },
+      "frame_sorted_runs": {
+        "run_count": 3,
+        "transitions": 2,
+        "longest_run": 1551,
+        "first_runs": [
+          {
+            "env": "B",
+            "length": 1482,
+            "start_episode": 1509,
+            "end_episode": 1947
+          },
+          {
+            "env": "C",
+            "length": 1435,
+            "start_episode": 1177,
+            "end_episode": 2769
+          },
+          {
+            "env": "A",
+            "length": 1551,
+            "start_episode": 822,
+            "end_episode": 404
+          }
+        ]
+      },
+      "failures": [],
+      "warnings": [
+        "episode_index order is interleaved across environments; this is expected for this converted shard, and split logic must not depend on episode order"
+      ],
+      "ok": true
+    },
+    "labelled_episode_count": 4468
+  }
+}

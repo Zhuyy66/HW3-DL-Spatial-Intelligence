@@ -1,0 +1,118 @@
+{
+  "generated_at": "2026-06-06T05:59:54.775639+00:00",
+  "dataset_root": "/root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_first_shard/calvin_task_ABC_D_lerobot_0_4",
+  "dataset": "calvin_task_ABC_D_lerobot_0_4",
+  "scene_info": "/root/Test/Zhr/DL/HW3/topic2_act/data/scene_info_fix/training/scene_info.npy",
+  "scene_ranges": [
+    {
+      "name": "calvin_scene_B",
+      "label": "B",
+      "start": 0,
+      "end": 598909
+    },
+    {
+      "name": "calvin_scene_C",
+      "label": "C",
+      "start": 598910,
+      "end": 1191338
+    },
+    {
+      "name": "calvin_scene_A",
+      "label": "A",
+      "start": 1191339,
+      "end": 1795044
+    }
+  ],
+  "validation": {
+    "ok": true,
+    "failures": [],
+    "warnings": [
+      "episode_index order is interleaved; split logic did not use episode order and this is not a failure"
+    ],
+    "counts": {
+      "A": 1551,
+      "B": 1482,
+      "C": 1435
+    },
+    "scene_frame_min": 0,
+    "scene_frame_max": 1795044,
+    "dataset_frame_min": 805,
+    "dataset_frame_max": 1794868,
+    "episode_order_runs": {
+      "run_count": 2929,
+      "transitions": 2928,
+      "longest_run": 10,
+      "first_runs": [
+        {
+          "env": "A",
+          "length": 1
+        },
+        {
+          "env": "B",
+          "length": 1
+        },
+        {
+          "env": "C",
+          "length": 2
+        },
+        {
+          "env": "A",
+          "length": 1
+        },
+        {
+          "env": "C",
+          "length": 1
+        },
+        {
+          "env": "B",
+          "length": 2
+        },
+        {
+          "env": "C",
+          "length": 2
+        },
+        {
+          "env": "B",
+          "length": 1
+        },
+        {
+          "env": "C",
+          "length": 1
+        },
+        {
+          "env": "A",
+          "length": 3
+        }
+      ]
+    },
+    "frame_sorted_runs": {
+      "run_count": 3,
+      "transitions": 2,
+      "longest_run": 1551,
+      "first_runs": [
+        {
+          "env": "B",
+          "length": 1482
+        },
+        {
+          "env": "C",
+          "length": 1435
+        },
+        {
+          "env": "A",
+          "length": 1551
+        }
+      ]
+    }
+  },
+  "outputs": {
+    "env_label_map": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/env_label_map.jsonl",
+    "episodes_A": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_A.json",
+    "episodes_ABC": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_ABC.json",
+    "episodes_D": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_D.json"
+  },
+  "notes": [
+    "episodes_D is empty because task_ABC_D training scene_info only labels ABC.",
+    "Do not infer environments from episode order or shard order."
+  ]
+}
