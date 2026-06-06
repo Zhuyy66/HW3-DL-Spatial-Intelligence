@@ -42,7 +42,111 @@ python topic2_act/scripts/verify_act_import.py --require-cuda \
   2>&1 | tee logs/day1_verify_act_import.log
 ```
 
-## Dataset Plan
+## Day 3 Dataset Plan
+
+The production data path is now the official course split dataset:
+
+```text
+https://huggingface.co/datasets/xiaoma26/calvin-lerobot
+```
+
+The previous `scene_info.npy` reverse-splitting path has been moved to
+`topic2_act/legacy/scene_info_split/` and is retained only as cross-validation
+evidence. Use official `splitA` for A-only training.
+
+Official split counts:
+
+| split | scene | episodes | frames | fps |
+| --- | --- | ---: | ---: | ---: |
+| splitA | A | 6089 | 366693 | 10 |
+| splitB | B | 6115 | 367096 | 10 |
+| splitC | C | 5666 | 337954 | 10 |
+| splitD | D | 5124 | 308918 | 10 |
+
+The official split schema uses `state`, `actions`, `image`, `wrist_image`, and
+`task_index`. Do not reuse old `observation.state`, `action`, or
+`observation.images.*` keys from the retired Day 2 shard.
+
+The shareable split-definition files are tracked in:
+
+```text
+topic2_act/dataset_split/xiaoma26_calvin_lerobot/
+```
+
+The server-generated copy under `topic2_act/data/splits/` is kept as a local
+run artifact and is ignored by git.
+
+## Day 3 Server Commands
+
+Run the setup checks first:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_robot
+source scripts/activate_cuda_driver_shim.sh 0 \
+  > >(tee logs/day3_cuda_driver_shim.log) 2>&1
+
+python topic2_act/scripts/verify_act_import.py --require-cuda \
+  2>&1 | tee logs/day3_verify_act_import.log
+```
+
+Prepare full `splitA` plus deterministic A-smoke500 episode view:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+nohup bash -lc '
+set -eo pipefail
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_robot
+export HF_ENDPOINT=https://hf-mirror.com
+python topic2_act/scripts/prepare_xiaoma_calvin_split.py \
+  --repo-id xiaoma26/calvin-lerobot \
+  --endpoint https://hf-mirror.com \
+  --revision main \
+  --local-dir /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot \
+  --output-dir /root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot \
+  --download-split splitA \
+  --metadata-splits splitA splitB splitC splitD \
+  --smoke-count 500 \
+  --seed 20260606 \
+  --manifest /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot_manifest.json
+' > logs/day3_prepare_xiaoma_splitA.log 2>&1 &
+echo $! > logs/day3_prepare_xiaoma_splitA.pid
+tail -f logs/day3_prepare_xiaoma_splitA.log
+```
+
+After completion:
+
+```bash
+python - <<'PY' 2>&1 | tee logs/day3_check_split_outputs.log
+import json
+from pathlib import Path
+
+root = Path("/root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot")
+for name in ["episodes_A_full.json", "episodes_A_smoke500.json", "official_split_summary.json"]:
+    path = root / name
+    print(name, "exists=", path.exists(), "bytes=", path.stat().st_size if path.exists() else 0)
+print("A_full", len(json.loads((root / "episodes_A_full.json").read_text())))
+print("A_smoke500", len(json.loads((root / "episodes_A_smoke500.json").read_text())))
+print((root / "official_split_summary.json").read_text()[:2000])
+PY
+
+du -sh /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot \
+  2>&1 | tee logs/day3_data_size_check.log
+```
+
+Acceptance criteria:
+
+- `day3_prepare_xiaoma_splitA.log` ends with `ok: official CALVIN split preparation completed`;
+- `episodes_A_full.json` contains 6089 episode indices;
+- `episodes_A_smoke500.json` contains 500 deterministic episode indices;
+- `official_split_summary.json` confirms `A=6089`, `B=6115`, `C=5666`, `D=5124`;
+- `topic2_act/docs/day3_data_audit.md` documents that the old reverse split is retired.
+- tracked split definitions are available under `topic2_act/dataset_split/xiaoma26_calvin_lerobot/`.
+
+## Retired Day 1/2 Dataset Probe
 
 The assignment PDF points to:
 

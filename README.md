@@ -32,3 +32,7 @@ verification commands are documented in `env/env_hw3_robot_setup.md`.
 The assignment PDF points to the course dataset
 `huiwon/calvin_task_ABC_D`. Probe metadata first before downloading the full
 dataset.
+
+Day 3 update: the course staff later published official environment splits at
+`xiaoma26/calvin-lerobot`. Topic 2 now uses that dataset as the production data
+path for A-only ACT preparation.

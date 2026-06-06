@@ -1,4 +1,4 @@
-# Day 2 Topic2 ACT baseline configuration for CALVIN LeRobot shards.
+# Day 3 Topic2 ACT baseline configuration for official CALVIN LeRobot splits.
 #
 # Network architecture fields are intentionally inherited from the installed
 # lerobot==0.4.0 ACTConfig defaults. Generate the exact server-side default dump
@@ -8,28 +8,56 @@
 
 project:
   name: hw3-topic2
-  task: calvin_task_ABC_D
+  task: calvin_lerobot_official_splits
   policy: act
   owner: member_b
 
 dataset:
-  repo_id: huiwon/calvin_task_ABC_D
-  shard_name: calvin_task_ABC_D_lerobot_0_4
+  repo_id: xiaoma26/calvin-lerobot
+  split_name: splitA
   observed_codebase_version: v2.1
   training_loader_note: confirm v2.1 support or convert to LeRobot v3.0 before direct lerobot==0.4.0 training
-  local_root: /root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_first_shard/calvin_task_ABC_D_lerobot_0_4
-  split_root: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4
-  a_only_episodes: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_A.json
-  abc_episodes: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_ABC.json
-  d_episodes: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_D.json
-  fps: 30
-  observation_state_key: observation.state
-  action_key: action
+  local_root: /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot/splitA
+  server_generated_split_root: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot
+  split_root: topic2_act/dataset_split/xiaoma26_calvin_lerobot
+  a_only_default_episodes: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_smoke500.json
+  a_only_full_episodes: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_full.json
+  official_summary: topic2_act/dataset_split/xiaoma26_calvin_lerobot/official_split_summary.json
+  fps: 10
+  scene: A
+  official_counts:
+    splitA:
+      scene: A
+      episodes: 6089
+      frames: 366693
+      fps: 10
+    splitB:
+      scene: B
+      episodes: 6115
+      frames: 367096
+      fps: 10
+    splitC:
+      scene: C
+      episodes: 5666
+      frames: 337954
+      fps: 10
+    splitD:
+      scene: D
+      episodes: 5124
+      frames: 308918
+      fps: 10
+  observation_state_key: state
+  action_key: actions
   image_keys:
-    - observation.images.image
-    - observation.images.wrist_image
-  task_key: annotation.human.action.task_description
-  env_label_source: episodes_stats.original_frame_idx + fixed task_ABC_D scene_info.npy
+    - image
+    - wrist_image
+  task_key: task_index
+  env_label_source: official xiaoma26 split directory and per-episode scene field
+  schema:
+    state_shape: [15]
+    actions_shape: [7]
+    image_shape: [200, 200, 3]
+    wrist_image_shape: [84, 84, 3]
 
 policy:
   type: act
@@ -58,13 +86,16 @@ logging:
 
 training_variants:
   a_only:
-    episodes_file: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_A.json
+    episodes_file: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_smoke500.json
+    full_episodes_file: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_full.json
     run_name: act_calvin_a_only
   abc_joint:
-    episodes_file: /root/Test/Zhr/DL/HW3/topic2_act/data/splits/calvin_task_ABC_D_lerobot_0_4/episodes_ABC.json
+    episodes_file: null
     run_name: act_calvin_abc_joint
+    note: splitA/splitB/splitC episode_index values each start at 0; use multi-dataset loading or remap indices before joint training
 
 guards:
-  do_not_infer_env_from_episode_order: true
-  do_not_copy_large_dataset_files_for_split: true
-  require_scene_info_label_validation: true
+  use_official_split_as_production_path: true
+  legacy_scene_info_split_retired: true
+  do_not_use_legacy_episodes_ABC_for_training: true
+  require_official_split_metadata_validation: true

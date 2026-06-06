@@ -1,0 +1,388 @@
+{
+  "generated_at": "2026-06-06T18:16:16.768545+00:00",
+  "repo_id": "xiaoma26/calvin-lerobot",
+  "endpoint": "https://hf-mirror.com",
+  "revision": "main",
+  "download_split": "splitA",
+  "metadata_only": false,
+  "local_dir": "/root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot",
+  "output_dir": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot",
+  "official_expected_counts": {
+    "splitA": {
+      "scene": "A",
+      "total_episodes": 6089,
+      "total_frames": 366693,
+      "total_tasks": 389
+    },
+    "splitB": {
+      "scene": "B",
+      "total_episodes": 6115,
+      "total_frames": 367096,
+      "total_tasks": 389
+    },
+    "splitC": {
+      "scene": "C",
+      "total_episodes": 5666,
+      "total_frames": 337954,
+      "total_tasks": 389
+    },
+    "splitD": {
+      "scene": "D",
+      "total_episodes": 5124,
+      "total_frames": 308918,
+      "total_tasks": 389
+    }
+  },
+  "split_summaries": [
+    {
+      "split": "splitA",
+      "scene": "A",
+      "ok": true,
+      "failures": [],
+      "warnings": [],
+      "info": {
+        "codebase_version": "v2.1",
+        "robot_type": "franka_emika",
+        "total_episodes": 6089,
+        "total_frames": 366693,
+        "total_tasks": 389,
+        "fps": 10,
+        "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
+        "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
+      },
+      "episode_count": 6089,
+      "episode_scene_counts": {
+        "A": 6089
+      },
+      "episode_length_sum": 366693,
+      "task_count": 389,
+      "stats_count": 6089,
+      "schema": {
+        "state": [
+          15
+        ],
+        "actions": [
+          7
+        ],
+        "image": [
+          200,
+          200,
+          3
+        ],
+        "wrist_image": [
+          84,
+          84,
+          3
+        ],
+        "task_index": [
+          1
+        ],
+        "episode_fields": [
+          "episode_index",
+          "length",
+          "scene",
+          "source_end_frame",
+          "source_episode_index",
+          "source_start_frame",
+          "tasks"
+        ]
+      },
+      "first_episode": {
+        "episode_index": 0,
+        "tasks": [
+          "lift_red_block_drawer: pick up the red block lying in the drawer"
+        ],
+        "length": 43,
+        "source_episode_index": 0,
+        "source_start_frame": 1572904,
+        "source_end_frame": 1572946,
+        "scene": "A"
+      }
+    },
+    {
+      "split": "splitB",
+      "scene": "B",
+      "ok": true,
+      "failures": [],
+      "warnings": [],
+      "info": {
+        "codebase_version": "v2.1",
+        "robot_type": "franka_emika",
+        "total_episodes": 6115,
+        "total_frames": 367096,
+        "total_tasks": 389,
+        "fps": 10,
+        "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
+        "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
+      },
+      "episode_count": 6115,
+      "episode_scene_counts": {
+        "B": 6115
+      },
+      "episode_length_sum": 367096,
+      "task_count": 389,
+      "stats_count": 6115,
+      "schema": {
+        "state": [
+          15
+        ],
+        "actions": [
+          7
+        ],
+        "image": [
+          200,
+          200,
+          3
+        ],
+        "wrist_image": [
+          84,
+          84,
+          3
+        ],
+        "task_index": [
+          1
+        ],
+        "episode_fields": [
+          "episode_index",
+          "length",
+          "scene",
+          "source_end_frame",
+          "source_episode_index",
+          "source_start_frame",
+          "tasks"
+        ]
+      },
+      "first_episode": {
+        "episode_index": 0,
+        "tasks": [
+          "move_slider_left: slide the door to the left"
+        ],
+        "length": 65,
+        "source_episode_index": 2,
+        "source_start_frame": 510341,
+        "source_end_frame": 510405,
+        "scene": "B"
+      }
+    },
+    {
+      "split": "splitC",
+      "scene": "C",
+      "ok": true,
+      "failures": [],
+      "warnings": [],
+      "info": {
+        "codebase_version": "v2.1",
+        "robot_type": "franka_emika",
+        "total_episodes": 5666,
+        "total_frames": 337954,
+        "total_tasks": 389,
+        "fps": 10,
+        "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
+        "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
+      },
+      "episode_count": 5666,
+      "episode_scene_counts": {
+        "C": 5666
+      },
+      "episode_length_sum": 337954,
+      "task_count": 389,
+      "stats_count": 5666,
+      "schema": {
+        "state": [
+          15
+        ],
+        "actions": [
+          7
+        ],
+        "image": [
+          200,
+          200,
+          3
+        ],
+        "wrist_image": [
+          84,
+          84,
+          3
+        ],
+        "task_index": [
+          1
+        ],
+        "episode_fields": [
+          "episode_index",
+          "length",
+          "scene",
+          "source_end_frame",
+          "source_episode_index",
+          "source_start_frame",
+          "tasks"
+        ]
+      },
+      "first_episode": {
+        "episode_index": 0,
+        "tasks": [
+          "lift_pink_block_drawer: go towards the pink block in the drawer and pick it up"
+        ],
+        "length": 65,
+        "source_episode_index": 6,
+        "source_start_frame": 924205,
+        "source_end_frame": 924269,
+        "scene": "C"
+      }
+    },
+    {
+      "split": "splitD",
+      "scene": "D",
+      "ok": true,
+      "failures": [],
+      "warnings": [],
+      "info": {
+        "codebase_version": "v2.1",
+        "robot_type": "franka_emika",
+        "total_episodes": 5124,
+        "total_frames": 308918,
+        "total_tasks": 389,
+        "fps": 10,
+        "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
+        "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
+      },
+      "episode_count": 5124,
+      "episode_scene_counts": {
+        "D": 5124
+      },
+      "episode_length_sum": 308918,
+      "task_count": 389,
+      "stats_count": 5124,
+      "schema": {
+        "state": [
+          15
+        ],
+        "actions": [
+          7
+        ],
+        "image": [
+          200,
+          200,
+          3
+        ],
+        "wrist_image": [
+          84,
+          84,
+          3
+        ],
+        "task_index": [
+          1
+        ],
+        "episode_fields": [
+          "episode_index",
+          "length",
+          "scene",
+          "source_end_frame",
+          "source_episode_index",
+          "source_start_frame",
+          "tasks"
+        ]
+      },
+      "first_episode": {
+        "episode_index": 0,
+        "tasks": [
+          "move_slider_left: move the door to the left side"
+        ],
+        "length": 65,
+        "source_episode_index": 0,
+        "source_start_frame": 315660,
+        "source_end_frame": 315724,
+        "scene": "D"
+      }
+    }
+  ],
+  "episode_outputs": {
+    "episodes_A_full": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_A_full.json",
+    "episodes_A_full_count": 6089,
+    "episodes_A_smoke": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_A_smoke500.json",
+    "episodes_A_smoke_count": 500,
+    "seed": 20260606
+  },
+  "download_manifest": "/root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot/download_manifest.json",
+  "parquet_probe": {
+    "available": true,
+    "path": "/root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot/splitA/data/chunk-000/episode_000000.parquet",
+    "rows": 43,
+    "columns": [
+      {
+        "name": "image",
+        "dtype": "object",
+        "sample_type": "dict",
+        "sample_shape": []
+      },
+      {
+        "name": "wrist_image",
+        "dtype": "object",
+        "sample_type": "dict",
+        "sample_shape": []
+      },
+      {
+        "name": "state",
+        "dtype": "object",
+        "sample_type": "ndarray",
+        "sample_shape": [
+          15
+        ]
+      },
+      {
+        "name": "actions",
+        "dtype": "object",
+        "sample_type": "ndarray",
+        "sample_shape": [
+          7
+        ]
+      },
+      {
+        "name": "timestamp",
+        "dtype": "float32",
+        "sample_type": "float32",
+        "sample_shape": []
+      },
+      {
+        "name": "frame_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "episode_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "task_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "source_frame_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      },
+      {
+        "name": "source_episode_index",
+        "dtype": "int64",
+        "sample_type": "int64",
+        "sample_shape": []
+      }
+    ]
+  },
+  "notes": [
+    "Official xiaoma26 split is the production path for Day 3 and later A-only training.",
+    "Old scene_info.npy reverse splitting is retained only as legacy cross-validation evidence.",
+    "splitA/splitB/splitC episode_index values each start at 0; ABC joint training must use multi-dataset loading or remap indices."
+  ]
+}

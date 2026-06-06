@@ -1,5 +1,10 @@
 # Day 2 CALVIN Data Audit
 
+> Legacy note: this audit describes the retired `huiwon/calvin_task_ABC_D`
+> reverse-splitting path. The Day 3 production data path is the official
+> `xiaoma26/calvin-lerobot` split dataset documented in
+> `topic2_act/docs/day3_data_audit.md`.
+
 - Generated at: `2026-06-06T05:58:46.446715+00:00`
 - Dataset root: `/root/Test/Zhr/DL/HW3/topic2_act/data/calvin_task_ABC_D_first_shard/calvin_task_ABC_D_lerobot_0_4`
 - Dataset name: `calvin_task_ABC_D_lerobot_0_4`
