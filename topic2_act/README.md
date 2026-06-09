@@ -527,6 +527,362 @@ fails with `api_key not configured (no-tty)`, do not rerun training until one of
 `wandb login` message can be misleading if the worker process cannot see a
 usable API key or `NETRC`.
 
+## Day 5 CALVIN Eval Scaffold
+
+Day 5 uses the completed `a_only_smoke500_50ep` run as the A-only training
+evidence for interface work. This is an engineering baseline for the evaluation
+chain, not the final A-only model for the A-only vs ABC comparison. Keep the
+full-data A-only and ABC runs in the Week 2 plan after the dataloader bottleneck,
+fixed-step budget, and ABC split loading decisions are resolved.
+
+The CALVIN evaluation path is intentionally a thin wrapper around the official
+CALVIN implementation:
+
+- official CALVIN clone: `topic2_act/calvin_official/`, ignored by git;
+- pinned official commit: `fa03f01f19c65920e18cf37398a9ce859274af76`;
+- local wrapper: `topic2_act/eval/lerobot_act_wrapper.py`;
+- local launcher: `topic2_act/eval/run_calvin_eval.py`;
+- local env verifier: `topic2_act/eval/verify_calvin_eval_env.py`.
+
+References:
+
+- CALVIN README: <https://github.com/mees/calvin>
+- CALVIN EGL/CUDA mapping wrapper:
+  <https://github.com/mees/calvin_env/blob/main/calvin_env/envs/play_lmp_wrapper.py>
+- EGL device probe: <https://github.com/StanfordVL/egl_probe>
+
+### Confirm A-only Baseline Evidence
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs/Day5 topic2_act/outputs/calvin_eval
+
+python topic2_act/scripts/summarize_act_run.py \
+  --run-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin/a_only_smoke500_50ep \
+  --log-file logs/Day4/day4_act_smoke500_50ep.log \
+  --pid-file logs/Day4/day4_act_smoke500_50ep.pid \
+  --min-epochs 50 \
+  --require-healthy-loss \
+  --require-checkpoint \
+  --require-wandb \
+  2>&1 | tee logs/Day5/day5_a_only_smoke500_final_check.log
+```
+
+Acceptance:
+
+- command exits 0;
+- `verdict` is `healthy`;
+- `observed_epoch` is `50`;
+- `checkpoint_count` is non-zero and the WandB URL is present.
+
+### Create or Reuse `env_hw3_calvin_eval`
+
+Run these commands on the Linux GPU server. If `apt-get` is unavailable in the
+server container, stop and record that blocker instead of silently skipping EGL
+system dependencies.
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs/Day5
+
+apt-get update 2>&1 | tee logs/Day5/day5_apt_update.log
+apt-get install -y libegl1 libgl1 libosmesa6-dev libglfw3 libgles2-mesa-dev patchelf mesa-utils \
+  2>&1 | tee logs/Day5/day5_apt_egl_deps.log
+
+source /opt/conda/etc/profile.d/conda.sh
+conda env list | tee logs/Day5/day5_conda_env_list_before.log
+conda create -y -n env_hw3_calvin_eval python=3.8 \
+  2>&1 | tee logs/Day5/day5_create_env_hw3_calvin_eval.log
+conda activate env_hw3_calvin_eval
+
+python -m pip install -U pip wheel "setuptools==57.5.0" "cmake==3.18.4.post1" \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  2>&1 | tee logs/Day5/day5_calvin_eval_pip_bootstrap.log
+```
+
+If this environment already exists from a failed attempt, reuse it and install
+the fixed dependency set below instead of deleting the env.
+
+### Repair and Install Official CALVIN
+
+The official CALVIN tree may be copied from Windows when the server cannot
+clone from GitHub. Before running any official shell script on Linux, remove
+CRLF line endings and confirm that recursive submodules, especially
+`calvin_env/tacto`, are present.
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs/Day5
+
+if [ ! -d topic2_act/calvin_official/.git ]; then
+  git clone --recurse-submodules https://github.com/mees/calvin.git topic2_act/calvin_official
+fi
+
+git -C topic2_act/calvin_official checkout fa03f01f19c65920e18cf37398a9ce859274af76
+git -C topic2_act/calvin_official rev-parse HEAD \
+  2>&1 | tee logs/Day5/day5_fix_calvin_head.log
+
+find topic2_act/calvin_official -type f \( -name '*.sh' -o -name '*.py' -o -name '*.yaml' -o -name '*.yml' \) -print0 \
+  | xargs -0 sed -i 's/\r$//'
+
+test -d topic2_act/calvin_official/calvin_env/tacto \
+  && echo "[OK] tacto submodule directory exists" \
+  || echo "[ERROR] tacto submodule directory missing; recopy full local topic2_act/calvin_official including submodules"
+
+git -C topic2_act/calvin_official submodule status --recursive \
+  2>&1 | tee logs/Day5/day5_fix_calvin_submodule_status.log
+```
+
+If `tacto submodule directory missing` appears, recopy the full local
+`topic2_act/calvin_official/` directory, including submodules, to the same
+server path and rerun the repair block. Do not continue to install until
+`calvin_env/tacto` exists.
+
+Do not run the upstream `sh install.sh` after a failed attempt. It is fragile in
+this server context because it can inherit CRLF line endings, pins
+`cmake==3.18.4` while the mirror serves `3.18.4.post1`, and continues after
+directory failures. Install the Day 5 eval smoke dependencies explicitly:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_calvin_eval
+
+python -m pip install -U pip wheel "setuptools==57.5.0" "cmake==3.18.4.post1" \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  2>&1 | tee logs/Day5/day5_fix_pip_bootstrap.log
+
+set -o pipefail
+python -m pip install "torch==1.13.1+cu117" "torchvision==0.14.1+cu117" \
+  --extra-index-url https://download.pytorch.org/whl/cu117 \
+  2>&1 | tee logs/Day5/day5_fix_torch113_cu117.log \
+|| python -m pip install "torch==1.13.1" "torchvision==0.14.1" \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  2>&1 | tee logs/Day5/day5_fix_torch113_tuna_fallback.log
+
+python -m pip install \
+  "numpy==1.23.5" "gitpython" "pyhash" \
+  "hydra-core==1.1.1" "hydra-colorlog" "omegaconf==2.1.2" \
+  "pytorch-lightning==1.8.6" "lightning-lite" \
+  "termcolor" "tqdm" "gym" "numpy-quaternion" \
+  "opencv-python-headless" "scipy" "matplotlib" "pandas" "rich" \
+  "pybullet" "egl_probe" "safetensors" \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple \
+  2>&1 | tee logs/Day5/day5_fix_eval_min_deps.log
+
+python -m pip install -e topic2_act/calvin_official/calvin_env/tacto --no-deps \
+  2>&1 | tee logs/Day5/day5_fix_install_tacto.log
+python -m pip install -e topic2_act/calvin_official/calvin_env --no-deps \
+  2>&1 | tee logs/Day5/day5_fix_install_calvin_env.log
+python -m pip install -e topic2_act/calvin_official/calvin_models --no-deps \
+  2>&1 | tee logs/Day5/day5_fix_install_calvin_models.log
+
+python -m pip check \
+  2>&1 | tee logs/Day5/day5_fix_pip_check.log
+```
+
+`pip check` is diagnostic here. Missing optional official CALVIN packages that
+are not used by the Day 5 placeholder smoke, such as `sentence-transformers`,
+`MulticoreTSNE`, `moviepy`, or `wandb`, are not blockers if the verifier and
+wrapper smoke below pass.
+
+Download only the official debug dataset for Day 5:
+
+```bash
+cd /root/Test/Zhr/DL/HW3/topic2_act/calvin_official/dataset
+sed -i 's/\r$//' download_data.sh
+
+bash download_data.sh debug \
+  2>&1 | tee /root/Test/Zhr/DL/HW3/logs/Day5/day5_fix_calvin_download_debug.log
+
+ls -lah /root/Test/Zhr/DL/HW3/topic2_act/calvin_official/dataset \
+  2>&1 | tee /root/Test/Zhr/DL/HW3/logs/Day5/day5_fix_calvin_dataset_listing.log
+```
+
+Acceptance: the dataset root is
+`/root/Test/Zhr/DL/HW3/topic2_act/calvin_official/dataset/calvin_debug_dataset/`.
+
+### Verify PyBullet and EGL
+
+Pick a currently safe physical GPU from `nvidia-smi`; GPU `4` is only an
+example. The shim exposes that physical GPU as logical CUDA device `0`, which is
+why the verifier uses `--cuda-device 0`. If `egl_probe` still reports
+`Graphics Devices: []` after imports pass, do not keep reinstalling Python
+packages. At that point the likely blocker is system NVIDIA EGL/GLVND visibility.
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_calvin_eval
+source scripts/activate_cuda_driver_shim.sh 4 \
+  > >(tee logs/Day5/day5_fix_verify_shim.log) 2>&1
+
+python -m egl_probe.get_available_devices \
+  2>&1 | tee logs/Day5/day5_fix_egl_probe_devices.log
+
+python topic2_act/eval/verify_calvin_eval_env.py \
+  --calvin-root /root/Test/Zhr/DL/HW3/topic2_act/calvin_official \
+  --cuda-device 0 \
+  --egl-diagnostics-dir /root/Test/Zhr/DL/HW3/logs/Day5/egl_diag_verify \
+  2>&1 | tee logs/Day5/day5_fix_verify_calvin_eval_env.log
+```
+
+Acceptance:
+
+- `calvin_agent`, `calvin_env`, `pybullet`, `egl_probe`, `safetensors`, and
+  `torch` imports are marked `ok`;
+- if `egl.ok` is false but imports are ok, continue to deep EGL diagnostics
+  below before changing dependencies.
+
+If `day5_fix_egl_probe_devices.log` reports `Graphics Devices: []`, collect
+GLVND, NVIDIA EGL library, and CALVIN raw checker evidence:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_calvin_eval
+source scripts/activate_cuda_driver_shim.sh 4 \
+  > >(tee logs/Day5/day5_egl_deep_shim.log) 2>&1
+
+echo "== GLVND vendor dirs ==" \
+  2>&1 | tee logs/Day5/day5_egl_deep_glvnd.log
+ls -lah /usr/share/glvnd/egl_vendor.d /etc/glvnd/egl_vendor.d \
+  2>&1 | tee -a logs/Day5/day5_egl_deep_glvnd.log
+cat /usr/share/glvnd/egl_vendor.d/*.json /etc/glvnd/egl_vendor.d/*.json \
+  2>&1 | tee -a logs/Day5/day5_egl_deep_glvnd.log
+
+ldconfig -p | grep -E 'libEGL|libGLX|libOpenGL|nvidia' \
+  2>&1 | tee logs/Day5/day5_egl_deep_ldconfig.log
+
+nvidia-smi \
+  2>&1 | tee logs/Day5/day5_egl_deep_nvidia_smi.log
+
+env | sort | grep -E 'CUDA|EGL|LD_LIBRARY|DISPLAY|NVIDIA' \
+  2>&1 | tee logs/Day5/day5_egl_deep_gpu_env.log
+
+find /usr /lib /opt /run \
+  \( -type f -o -type l \) \
+  \( -name 'libEGL_nvidia.so*' -o -name 'libGLX_nvidia.so*' -o -name 'libnvidia-egl*.so*' -o -name 'libcuda.so*' \) -print \
+  2>&1 | tee logs/Day5/day5_egl_deep_driver_libs.log
+
+dpkg -l | grep -E 'nvidia|libegl|mesa|glvnd' \
+  2>&1 | tee logs/Day5/day5_egl_deep_dpkg.log
+
+apt-cache policy libnvidia-gl-535 nvidia-driver-535 nvidia-utils-535 \
+  2>&1 | tee logs/Day5/day5_egl_deep_apt_policy.log
+
+eglinfo -B \
+  2>&1 | tee logs/Day5/day5_egl_deep_eglinfo.log
+```
+
+Run CALVIN's raw EGL checker separately so stdout and stderr are easy to inspect:
+
+```bash
+cd /root/Test/Zhr/DL/HW3/topic2_act/calvin_official/calvin_env/egl_check
+rm -f EGL_options.o
+bash build.sh \
+  2>&1 | tee /root/Test/Zhr/DL/HW3/logs/Day5/day5_egl_deep_calvin_build.log
+
+./EGL_options.o \
+  > /root/Test/Zhr/DL/HW3/logs/Day5/day5_egl_deep_calvin_egl_stdout.log \
+  2> /root/Test/Zhr/DL/HW3/logs/Day5/day5_egl_deep_calvin_egl_stderr.log || true
+
+cat /root/Test/Zhr/DL/HW3/logs/Day5/day5_egl_deep_calvin_egl_stderr.log
+cat /root/Test/Zhr/DL/HW3/logs/Day5/day5_egl_deep_calvin_egl_stdout.log
+```
+
+Interpretation:
+
+- no `libEGL_nvidia.so*` or no NVIDIA GLVND JSON means system NVIDIA EGL
+  userspace is missing or hidden;
+- `libEGL_nvidia.so*` exists but GLVND JSON is missing means the ICD needs to be
+  repaired;
+- both exist but `eglQueryDevicesEXT` still finds zero devices means check driver
+  library version mixing and `LD_LIBRARY_PATH` ordering.
+
+Do not install `libnvidia-gl-535` merely because the candidate is in the 535
+series. The server currently reports kernel driver `535.129.03`; an apt
+candidate such as `535.309.01-0ubuntu0.22.04.1` is the same major branch but not
+an exact userspace/kernel point-version match. Before installing, check whether
+the exact `535.129.03` userspace package is available or ask the server
+administrator whether the newer 535 userspace is acceptable:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs/Day5
+
+apt-cache policy libnvidia-gl-535 nvidia-driver-535 nvidia-utils-535 \
+  2>&1 | tee logs/Day5/day5_nvidia_gl_policy_before_install.log
+
+apt-cache madison libnvidia-gl-535 nvidia-driver-535 nvidia-utils-535 \
+  2>&1 | tee logs/Day5/day5_nvidia_gl_madison.log
+
+apt-cache policy 'libnvidia-gl-535=535.129.03*' \
+  2>&1 | tee logs/Day5/day5_nvidia_gl_535129_policy.log
+```
+
+Install system NVIDIA EGL userspace only if an exact `535.129.03` package is
+available, an administrator confirms `535.309.01` userspace is safe with the
+current driver, or the host libraries can be mounted/exposed without changing
+system packages.
+
+### Run Placeholder Wrapper Smoke
+
+The wrapper smoke loads the A-only smoke500 checkpoint and runs a deliberately
+short CALVIN rollout. The placeholder action is zero arm motion plus an open
+gripper (`action[-1] = 1.0`), because CALVIN requires the gripper action to be
+either `-1` or `1`. Success rate is not a Day 5 metric; the target is that the
+official env calls our `reset()` and `step()` without interface errors.
+
+Use `--egl-policy direct` as the Day 5 unblock path when NVIDIA EGL device
+enumeration is still broken. This temporarily disables the CALVIN EGL plugin and
+clears all camera configs, so the env becomes state-only PyBullet DIRECT. This
+avoids the tactile `tacto -> pyrender` rendering dependency and is not the final
+Week 2 evaluation mode.
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_calvin_eval
+source scripts/activate_cuda_driver_shim.sh 4 \
+  > >(tee logs/Day5/day5_direct_nocamera_gripperfix_wrapper_shim.log) 2>&1
+
+DATASET=/root/Test/Zhr/DL/HW3/topic2_act/calvin_official/dataset/calvin_debug_dataset
+CKPT=$(find /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints \
+  -path '*/pretrained_model/model.safetensors' -printf '%h\n' | sort | tail -n 1)
+
+echo "DATASET=$DATASET"
+echo "CKPT=$CKPT"
+
+python topic2_act/eval/run_calvin_eval.py \
+  --calvin-root /root/Test/Zhr/DL/HW3/topic2_act/calvin_official \
+  --dataset-path "$DATASET" \
+  --checkpoint "$CKPT" \
+  --eval-log-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/calvin_eval/day5_zero_action_debug_direct_nocamera_gripperfix \
+  --cuda-device 0 \
+  --num-sequences 1 \
+  --ep-len 2 \
+  --egl-policy direct \
+  2>&1 | tee logs/Day5/day5_direct_nocamera_gripperfix_lerobot_act_wrapper_smoke.log
+```
+
+Acceptance:
+
+- `wrapper_checkpoint_summary.loaded` is true;
+- `tensor_count` is non-zero;
+- `egl_audit.egl_policy` is `direct` and notes that CUDA/EGL mapping was
+  skipped for the temporary Day 5 smoke;
+- `calvin_eval_start.direct_camera_mode` is `none`;
+- logs show `LeRobotACTWrapper.reset called` and at least one
+  `LeRobotACTWrapper.step called`;
+- logs no longer show `assert self.gripper_action in (-1, 1)`;
+- the command reaches `calvin_eval_result` or a clear CALVIN environment error
+  that can be debugged from the saved log.
+
+After NVIDIA EGL is repaired, rerun the same command with `--egl-policy strict`
+and `eval-log-dir` set to a separate output directory.
+
 ## Retired Day 1/2 Dataset Probe
 
 The assignment PDF points to:

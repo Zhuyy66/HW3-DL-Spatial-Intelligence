@@ -12,6 +12,7 @@ envs/
 data/
 outputs/
 checkpoints/
+topic2_act/calvin_official/
 *.ply
 *.ckpt
 *.pth
