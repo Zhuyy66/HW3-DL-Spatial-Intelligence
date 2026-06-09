@@ -1,4 +1,4 @@
-"""Local static tests for the Day 5 LeRobot ACT CALVIN wrapper skeleton."""
+"""Local static tests for the LeRobot ACT CALVIN wrapper."""
 
 from __future__ import annotations
 
@@ -10,6 +10,32 @@ from pathlib import Path
 import numpy as np
 
 from topic2_act.eval.lerobot_act_wrapper import LeRobotACTWrapper
+
+
+class FakeWorkerTransport:
+    def __init__(self, action: np.ndarray | None = None) -> None:
+        self.action = np.asarray(action if action is not None else [0.1, 0, 0, 0, 0, 0, -1], dtype=np.float32)
+        self.reset_calls = 0
+        self.step_calls = 0
+        self.closed = False
+        self.last_obs = None
+        self.last_goal = None
+
+    def reset(self) -> dict[str, int]:
+        self.reset_calls += 1
+        return {"reset_count": self.reset_calls}
+
+    def step(self, obs, goal):
+        self.step_calls += 1
+        self.last_obs = obs
+        self.last_goal = goal
+        return self.action.copy(), {"fake_step_calls": self.step_calls}
+
+    def close(self) -> None:
+        self.closed = True
+
+    def summary(self) -> dict[str, object]:
+        return {"fake": True, "reset_calls": self.reset_calls, "step_calls": self.step_calls}
 
 
 class LeRobotACTWrapperTest(unittest.TestCase):
@@ -52,6 +78,34 @@ class LeRobotACTWrapperTest(unittest.TestCase):
             self.assertEqual(action.dtype, np.float32)
             self.assertTrue(np.all(action[:6] == 0.0))
             self.assertEqual(float(action[-1]), 1.0)
+
+    def test_fake_worker_transport_receives_raw_obs_and_goal(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            model_dir = Path(tmpdir) / "pretrained_model"
+            model_dir.mkdir()
+            (model_dir / "model.safetensors").write_bytes(b"placeholder")
+            fake = FakeWorkerTransport()
+            wrapper = LeRobotACTWrapper(model_dir, action_dim=7, load_weights=False, worker_transport=fake)
+            obs = {
+                "rgb_obs": {"rgb_static": np.zeros((200, 200, 3), dtype=np.uint8)},
+                "robot_obs": np.arange(15, dtype=np.float32),
+            }
+            goal = {"language": "move"}
+
+            wrapper.reset()
+            action = wrapper.step(obs, goal)
+            summary = wrapper.checkpoint_summary()
+            wrapper.close()
+
+            self.assertEqual(wrapper.step_count, 1)
+            self.assertEqual(fake.reset_calls, 1)
+            self.assertEqual(fake.step_calls, 1)
+            self.assertIs(fake.last_obs, obs)
+            self.assertIs(fake.last_goal, goal)
+            self.assertEqual(action.dtype, np.float32)
+            self.assertTrue(np.array_equal(action, fake.action))
+            self.assertTrue(summary["worker_enabled"])
+            self.assertTrue(fake.closed)
 
     @unittest.skipUnless(
         importlib.util.find_spec("safetensors") and importlib.util.find_spec("torch"),

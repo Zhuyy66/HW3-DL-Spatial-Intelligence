@@ -1,4 +1,4 @@
-"""Thin CALVIN evaluation launcher for the Day 5 LeRobot ACT wrapper."""
+"""CALVIN evaluation launcher for the Day 6 LeRobot ACT bridge."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -20,7 +22,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run CALVIN with the HW3 LeRobot ACT wrapper skeleton.")
+    parser = argparse.ArgumentParser(description="Run CALVIN with the HW3 LeRobot ACT bridge.")
     parser.add_argument("--calvin-root", default=None, help="Path to the official CALVIN clone.")
     parser.add_argument("--dataset-path", default=None, help="Path to a downloaded CALVIN dataset split/debug dataset.")
     parser.add_argument("--checkpoint", required=True, help="ACT run dir, checkpoint dir, or model weights file.")
@@ -31,14 +33,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run-wrapper-only", action="store_true", help="Only instantiate/reset/step the wrapper.")
     parser.add_argument("--debug", action="store_true", help="Pass debug=True into official evaluate_policy.")
     parser.add_argument("--no-load-weights", action="store_true", help="Resolve checkpoint path without reading tensors.")
+    parser.add_argument("--worker-python", default=None, help="Python executable for env_hw3_robot / LeRobot worker.")
+    parser.add_argument("--worker-device", default=None, help="Inference device used inside the LeRobot worker.")
+    parser.add_argument("--worker-log", default=None, help="File for worker stderr/logging.")
+    parser.add_argument("--worker-timeout", type=float, default=180.0, help="Seconds to wait for worker protocol replies.")
+    parser.add_argument(
+        "--single-rollout-smoke",
+        action="store_true",
+        help="Run one manual rollout episode and log action/movement evidence instead of official eval.",
+    )
+    parser.add_argument("--rollout-steps", type=int, default=60, help="Step count for --single-rollout-smoke.")
     parser.add_argument(
         "--egl-policy",
-        choices=("strict", "fallback0", "direct"),
+        choices=("strict", "fallback0", "direct", "direct-cameras"),
         default="strict",
         help=(
             "EGL handling for CALVIN env creation. strict requires CUDA->EGL mapping; "
             "fallback0 sets EGL_VISIBLE_DEVICES=0 if mapping fails; direct disables "
-            "the CALVIN EGL plugin and uses PyBullet DIRECT/TinyRenderer for Day 5 smoke."
+            "the CALVIN EGL plugin and removes cameras; direct-cameras keeps static "
+            "and gripper cameras under PyBullet DIRECT for Day 6 real image inference."
         ),
     )
     return parser.parse_args()
@@ -91,6 +104,10 @@ def audit_egl(cuda_device: int, egl_policy: str) -> dict[str, Any]:
         audit["fallback"] = "skipped CUDA/EGL mapping because direct policy disables CALVIN use_egl"
         audit["EGL_VISIBLE_DEVICES_after"] = os.environ.get("EGL_VISIBLE_DEVICES")
         return audit
+    if egl_policy == "direct-cameras":
+        audit["fallback"] = "skipped CUDA/EGL mapping because direct-cameras policy disables CALVIN use_egl"
+        audit["EGL_VISIBLE_DEVICES_after"] = os.environ.get("EGL_VISIBLE_DEVICES")
+        return audit
 
     try:
         from calvin_env.utils.utils import get_egl_device_id
@@ -117,8 +134,32 @@ def clear_cameras_for_direct_policy(render_conf: Any) -> None:
     render_conf.env.cameras = {}
 
 
-def make_direct_env(dataset_path: Path) -> Any:
-    """Create a state-only CALVIN env with PyBullet DIRECT and use_egl=False."""
+def restrict_cameras_for_direct_policy(render_conf: Any) -> None:
+    """Keep only static and gripper cameras for Day 6 direct image smoke."""
+
+    cameras: dict[str, Any] = {}
+    existing = getattr(render_conf, "cameras", {}) or {}
+    for name in ("static", "gripper"):
+        if name in existing:
+            cameras[name] = existing[name]
+        else:
+            cameras[name] = _load_calvin_camera_conf(name)
+    render_conf.cameras = cameras
+    render_conf.env.cameras = cameras
+
+
+def _load_calvin_camera_conf(name: str) -> Any:
+    import calvin_env
+    from omegaconf import OmegaConf
+
+    camera_path = Path(calvin_env.__file__).resolve().parents[1] / "conf" / "cameras" / "cameras" / f"{name}.yaml"
+    if not camera_path.is_file():
+        raise FileNotFoundError(f"CALVIN camera config not found: {camera_path}")
+    return OmegaConf.load(camera_path)
+
+
+def make_direct_env(dataset_path: Path, camera_mode: str = "none") -> Any:
+    """Create a CALVIN env with PyBullet DIRECT and use_egl=False."""
 
     validation_dir = dataset_path / "validation"
     merged_config = validation_dir / ".hydra" / "merged_config.yaml"
@@ -133,8 +174,13 @@ def make_direct_env(dataset_path: Path) -> Any:
     render_conf = OmegaConf.load(merged_config)
     if not hydra.core.global_hydra.GlobalHydra.instance().is_initialized():
         hydra.initialize(".")
-    clear_cameras_for_direct_policy(render_conf)
-    LOGGER.info("creating CALVIN env with use_egl=False and cameras=none for Day 5 direct smoke")
+    if camera_mode == "none":
+        clear_cameras_for_direct_policy(render_conf)
+    elif camera_mode == "static_gripper":
+        restrict_cameras_for_direct_policy(render_conf)
+    else:
+        raise ValueError(f"unknown direct camera_mode: {camera_mode!r}")
+    LOGGER.info("creating CALVIN env with use_egl=False and camera_mode=%s", camera_mode)
     return hydra.utils.instantiate(
         render_conf.env,
         show_gui=False,
@@ -146,7 +192,9 @@ def make_direct_env(dataset_path: Path) -> Any:
 
 def make_env_for_policy(eval_mod: Any, dataset_path: Path, egl_policy: str) -> Any:
     if egl_policy == "direct":
-        return make_direct_env(dataset_path)
+        return make_direct_env(dataset_path, camera_mode="none")
+    if egl_policy == "direct-cameras":
+        return make_direct_env(dataset_path, camera_mode="static_gripper")
     return eval_mod.make_env(str(dataset_path))
 
 
@@ -161,16 +209,35 @@ def load_wrapper_class():
     return LeRobotACTWrapper
 
 
-def dry_run_wrapper(args: argparse.Namespace) -> int:
+def make_wrapper(args: argparse.Namespace) -> Any:
     LeRobotACTWrapper = load_wrapper_class()
-    model = LeRobotACTWrapper(
+    load_weights = (not args.no_load_weights) and not args.worker_python
+    return LeRobotACTWrapper(
         args.checkpoint,
         device=f"cuda:{args.cuda_device}",
-        load_weights=not args.no_load_weights,
+        load_weights=load_weights,
+        worker_python=args.worker_python,
+        worker_device=args.worker_device or f"cuda:{args.cuda_device}",
+        worker_log=args.worker_log,
+        worker_timeout=args.worker_timeout,
     )
+
+
+def dry_run_wrapper(args: argparse.Namespace) -> int:
+    model = make_wrapper(args)
     print_json("wrapper_checkpoint_summary", model.checkpoint_summary())
     model.reset()
-    action = model.step(obs={}, goal="day5 wrapper smoke")
+    if args.worker_python:
+        print_json(
+            "wrapper_dry_run",
+            {
+                "worker_enabled": True,
+                "step_skipped": "worker inference needs a real CALVIN observation",
+            },
+        )
+        model.close()
+        return 0
+    action = model.step(obs={}, goal="day6 wrapper smoke")
     print_json(
         "wrapper_dry_run",
         {
@@ -180,6 +247,139 @@ def dry_run_wrapper(args: argparse.Namespace) -> int:
             "action_sum": float(action.sum()),
         },
     )
+    model.close()
+    return 0
+
+
+def extract_tcp_pos(obs: Any, info: dict[str, Any] | None = None) -> list[float] | None:
+    """Extract TCP xyz from CALVIN info first, then robot_obs fallback."""
+
+    robot_info = info.get("robot_info") if isinstance(info, dict) else None
+    if isinstance(robot_info, dict):
+        for key in ("tcp_pos", "tcp_position", "tcp_pos_world"):
+            if key in robot_info:
+                return np.asarray(robot_info[key], dtype=np.float64).reshape(-1)[:3].tolist()
+
+    robot_obs = None
+    if isinstance(obs, dict):
+        if "robot_obs" in obs:
+            robot_obs = obs["robot_obs"]
+        else:
+            state_obs = obs.get("state_obs")
+            if isinstance(state_obs, dict) and "robot_obs" in state_obs:
+                robot_obs = state_obs["robot_obs"]
+    if robot_obs is None:
+        return None
+    flat = np.asarray(robot_obs, dtype=np.float64).reshape(-1)
+    if flat.size < 3:
+        return None
+    return flat[:3].tolist()
+
+
+def single_rollout_smoke(args: argparse.Namespace) -> int:
+    if args.calvin_root is None:
+        raise ValueError("--calvin-root is required for --single-rollout-smoke")
+    if args.dataset_path is None:
+        raise ValueError("--dataset-path is required for --single-rollout-smoke")
+    if not args.worker_python:
+        raise ValueError("--worker-python is required for --single-rollout-smoke Day 6 real ACT inference")
+    if args.rollout_steps <= 0:
+        raise ValueError(f"--rollout-steps must be positive, got {args.rollout_steps}")
+
+    calvin_root = add_calvin_paths(args.calvin_root)
+    dataset_path = require_existing_dir(args.dataset_path, "CALVIN dataset")
+    print_json(
+        "calvin_eval_start",
+        {
+            "mode": "single_rollout_smoke",
+            "calvin_root": str(calvin_root) if calvin_root else None,
+            "dataset_path": str(dataset_path),
+            "checkpoint": args.checkpoint,
+            "eval_log_dir": args.eval_log_dir,
+            "rollout_steps": args.rollout_steps,
+            "egl_policy": args.egl_policy,
+            "direct_camera_mode": (
+                "none" if args.egl_policy == "direct" else "static_gripper" if args.egl_policy == "direct-cameras" else None
+            ),
+            "worker_python": args.worker_python,
+            "worker_device": args.worker_device or f"cuda:{args.cuda_device}",
+            "worker_log": args.worker_log,
+        },
+    )
+
+    egl_audit = audit_egl(args.cuda_device, args.egl_policy)
+    print_json("egl_audit", egl_audit)
+    if args.egl_policy == "strict" and egl_audit.get("egl_mapping_error"):
+        raise RuntimeError(f"EGL device mapping failed: {egl_audit['egl_mapping_error']}")
+
+    eval_mod = None
+    if args.egl_policy not in ("direct", "direct-cameras"):
+        eval_mod = importlib.import_module("calvin_agent.evaluation.evaluate_policy")
+    model = make_wrapper(args)
+    print_json("wrapper_checkpoint_summary", model.checkpoint_summary())
+
+    env = None
+    action_norms: list[float] = []
+    gripper_values: list[float] = []
+    action_shapes: list[list[int]] = []
+    tcp_trace: list[list[float]] = []
+    action_preview: list[dict[str, Any]] = []
+    try:
+        env = make_env_for_policy(eval_mod, dataset_path, args.egl_policy)
+        obs = env.reset()
+        model.reset()
+        start_tcp = extract_tcp_pos(obs)
+        if start_tcp is not None:
+            tcp_trace.append(start_tcp)
+
+        for step_idx in range(args.rollout_steps):
+            action = np.asarray(model.step(obs, goal="day6 connectivity smoke"), dtype=np.float32).reshape(-1)
+            action_shapes.append(list(action.shape))
+            action_norms.append(float(np.linalg.norm(action[: min(6, action.size)])))
+            gripper_values.append(float(action[-1]) if action.size else float("nan"))
+            if step_idx < 5 or step_idx == args.rollout_steps - 1:
+                action_preview.append(
+                    {
+                        "step": step_idx,
+                        "shape": list(action.shape),
+                        "norm_first6": action_norms[-1],
+                        "gripper": gripper_values[-1],
+                        "action": action.astype(float).tolist(),
+                    }
+                )
+            obs, _reward, _done, info = env.step(action)
+            tcp_pos = extract_tcp_pos(obs, info)
+            if tcp_pos is not None:
+                tcp_trace.append(tcp_pos)
+
+        start = np.asarray(tcp_trace[0], dtype=np.float64) if tcp_trace else None
+        tcp_deltas = [float(np.linalg.norm(np.asarray(pos, dtype=np.float64) - start)) for pos in tcp_trace] if start is not None else []
+        max_tcp_delta = max(tcp_deltas) if tcp_deltas else None
+        movement_threshold = 1e-4
+        moved = bool(max_tcp_delta is not None and max_tcp_delta > movement_threshold)
+        result = {
+            "steps": args.rollout_steps,
+            "wrapper_step_count": model.step_count,
+            "action_shapes": action_shapes[:5],
+            "last_action_shape": action_shapes[-1] if action_shapes else None,
+            "max_action_norm_first6": max(action_norms) if action_norms else None,
+            "min_action_norm_first6": min(action_norms) if action_norms else None,
+            "gripper_values": sorted(set(gripper_values)),
+            "start_tcp_pos": tcp_trace[0] if tcp_trace else None,
+            "end_tcp_pos": tcp_trace[-1] if tcp_trace else None,
+            "tcp_trace_count": len(tcp_trace),
+            "max_tcp_delta": max_tcp_delta,
+            "movement_threshold": movement_threshold,
+            "moved": moved,
+            "action_preview": action_preview,
+        }
+        print_json("single_rollout_smoke_result", result)
+        if not moved:
+            raise RuntimeError(f"single rollout did not exceed movement threshold: max_tcp_delta={max_tcp_delta}")
+    finally:
+        model.close()
+        if env is not None and hasattr(env, "close"):
+            env.close()
     return 0
 
 
@@ -201,7 +401,9 @@ def run_official_eval(args: argparse.Namespace) -> int:
             "num_sequences": args.num_sequences,
             "ep_len": args.ep_len,
             "egl_policy": args.egl_policy,
-            "direct_camera_mode": "none" if args.egl_policy == "direct" else None,
+            "direct_camera_mode": (
+                "none" if args.egl_policy == "direct" else "static_gripper" if args.egl_policy == "direct-cameras" else None
+            ),
         },
     )
 
@@ -214,31 +416,32 @@ def run_official_eval(args: argparse.Namespace) -> int:
     eval_mod.NUM_SEQUENCES = args.num_sequences
     eval_mod.EP_LEN = args.ep_len
 
-    LeRobotACTWrapper = load_wrapper_class()
-    model = LeRobotACTWrapper(
-        args.checkpoint,
-        device=f"cuda:{args.cuda_device}",
-        load_weights=not args.no_load_weights,
-    )
+    model = make_wrapper(args)
     print_json("wrapper_checkpoint_summary", model.checkpoint_summary())
 
-    env = make_env_for_policy(eval_mod, dataset_path, args.egl_policy)
-    results = eval_mod.evaluate_policy(
-        model,
-        env,
-        epoch="hw3_day5_smoke",
-        eval_log_dir=args.eval_log_dir,
-        debug=args.debug,
-        create_plan_tsne=False,
-    )
-    print_json(
-        "calvin_eval_result",
-        {
-            "result_count": len(results) if hasattr(results, "__len__") else None,
-            "results": list(results) if isinstance(results, (list, tuple)) else str(results),
-            "wrapper_step_count": model.step_count,
-        },
-    )
+    env = None
+    try:
+        env = make_env_for_policy(eval_mod, dataset_path, args.egl_policy)
+        results = eval_mod.evaluate_policy(
+            model,
+            env,
+            epoch="hw3_day6_bridge",
+            eval_log_dir=args.eval_log_dir,
+            debug=args.debug,
+            create_plan_tsne=False,
+        )
+        print_json(
+            "calvin_eval_result",
+            {
+                "result_count": len(results) if hasattr(results, "__len__") else None,
+                "results": list(results) if isinstance(results, (list, tuple)) else str(results),
+                "wrapper_step_count": model.step_count,
+            },
+        )
+    finally:
+        model.close()
+        if env is not None and hasattr(env, "close"):
+            env.close()
     return 0
 
 
@@ -249,6 +452,8 @@ def main() -> int:
 
     if args.dry_run_wrapper_only:
         return dry_run_wrapper(args)
+    if args.single_rollout_smoke:
+        return single_rollout_smoke(args)
     return run_official_eval(args)
 
 
