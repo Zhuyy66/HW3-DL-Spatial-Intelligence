@@ -2,6 +2,124 @@
 
 Member B owns this track.
 
+## Week 1 Artifact Index
+
+This section is the Day 7 handoff index for the Topic 2 Week 1 artifacts. It
+records the actual production path after the course staff published the official
+`xiaoma26/calvin-lerobot` split dataset.
+
+| Artifact | Actual path | Status | Validation evidence |
+| --- | --- | --- | --- |
+| Official A split metadata | `topic2_act/dataset_split/xiaoma26_calvin_lerobot/` | Tracked small split definitions. Server-side data lives under ignored `topic2_act/data/`. | `logs/Day 3/day3_check_split_outputs.log` confirms `A_full=6089` and `A_smoke500=500`. |
+| Production data audit | `topic2_act/docs/day3_data_audit.md` | Current production audit. | Confirms official split schema and counts for A/B/C/D. |
+| Legacy reverse split audit | `topic2_act/data/data_audit.md` and `topic2_act/legacy/scene_info_split/scripts/split_env_a.py` | Retired training route, retained as cross-validation evidence. | Independent reverse audit matched the official split counts for A/B/C. |
+| A-only ACT engineering baseline | `topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints/188300/pretrained_model/` | Ignored heavy checkpoint on the server/local artifact copy. This model validates the chain only. | `logs/Day4/day4_act_10epoch_health_check.log` and `logs/Day5/day5_a_only_smoke500_final_check.log` report `verdict: healthy`, `observed_epoch=50`, 250 checkpoints, and WandB run `wru9vt3x`. |
+| ACT training wrapper | `topic2_act/scripts/run_act_train.py` | Tracked. Converts official split fields to canonical LeRobot v3.0 features, then launches LeRobot training. | Dry run, 5-epoch smoke, and 50-epoch baseline completed. |
+| CALVIN ACT wrapper | `topic2_act/eval/lerobot_act_wrapper.py` | Tracked. Keeps CALVIN `reset()` / `step(obs, goal)` interface and delegates real ACT inference to a persistent Python 3.12 worker. | `logs/Day6/day6_bridge_fidelity_after_config_fix.log` has exact bridge fidelity. |
+| Worker bridge | `topic2_act/eval/lerobot_act_worker.py` and `topic2_act/eval/bridge_protocol.py` | Tracked. Uses length-prefixed pickle protocol over stdio. | Day 6 bridge fidelity exact/allclose check passed. |
+| CALVIN rollout launcher | `topic2_act/eval/run_calvin_eval.py` | Tracked. Runs the official CALVIN-side rollout path with the local wrapper. | `logs/Day6/day6_real_act_direct_camera_rollout_after_pickle_fix.log` reaches `single_rollout_smoke_result`, reports action shape `[7]`, and shows robot movement. |
+
+Important interpretation notes:
+
+- `a_only_smoke500_50ep` is a Week 1 engineering baseline for environment,
+  data, training, checkpoint, WandB, and wrapper connectivity validation. The
+  final A-only vs ABC comparison should use a planned comparable-budget run.
+- The old `split_env_a.py` name refers to the retired `scene_info.npy` reverse
+  split path. Keep it as evidence that independently derived A/B/C counts agree
+  with the official split; do not use it as the production training route.
+- Do not add compatibility wrappers for retired paths. For reproducible server
+  commands, create a stable `last` symlink to the latest checkpoint directory.
+
+### Day 7 Stable Checkpoint Pointer
+
+Run this on the Linux GPU server after syncing the repository and model outputs:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs/Day7
+
+CKPT_REAL=$(find topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints \
+  -mindepth 2 -maxdepth 2 -path '*/pretrained_model' -type d | sort | tail -n 1)
+ln -sfn "$CKPT_REAL" topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints/last
+{
+  echo "CKPT_REAL=$CKPT_REAL"
+  ls -lah topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints/last
+} 2>&1 | tee logs/Day7/day7_ckpt_last_link.log
+```
+
+### Day 7 Revalidation Commands
+
+Use `2>&1 | tee ...` for these short verification commands so the terminal
+remains readable and logs are saved for local inspection.
+
+Confirm the A-only smoke500 baseline:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_robot
+
+python topic2_act/scripts/summarize_act_run.py \
+  --run-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin/a_only_smoke500_50ep \
+  --log-file logs/Day4/day4_act_smoke500_50ep.log \
+  --pid-file logs/Day4/day4_act_smoke500_50ep.pid \
+  --min-epochs 50 \
+  --require-healthy-loss \
+  --require-checkpoint \
+  --require-wandb \
+  2>&1 | tee logs/Day7/day7_a_only_smoke500_final_check.log
+```
+
+Recheck ACT worker bridge fidelity:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_robot
+source scripts/activate_cuda_driver_shim.sh 4 \
+  > >(tee logs/Day7/day7_robot_shim.log) 2>&1
+
+python topic2_act/eval/run_bridge_fidelity.py \
+  --checkpoint /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints/last \
+  --dataset-root /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot/splitA_episodes_A_smoke500_canonical_v3 \
+  --worker-python /opt/conda/envs/env_hw3_robot/bin/python \
+  --device cuda:0 \
+  2>&1 | tee logs/Day7/day7_bridge_fidelity.log
+```
+
+Run one CALVIN direct-cameras smoke with the real ACT worker:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_calvin_eval
+source scripts/activate_cuda_driver_shim.sh 4 \
+  > >(tee logs/Day7/day7_calvin_shim.log) 2>&1
+
+python topic2_act/eval/run_calvin_eval.py \
+  --calvin-root /root/Test/Zhr/DL/HW3/topic2_act/calvin_official \
+  --dataset-path /root/Test/Zhr/DL/HW3/topic2_act/calvin_official/dataset/calvin_debug_dataset \
+  --checkpoint /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin/a_only_smoke500_50ep/lerobot_train/checkpoints/last \
+  --worker-python /opt/conda/envs/env_hw3_robot/bin/python \
+  --worker-device cuda:0 \
+  --worker-log logs/Day7/day7_worker_real_act.log \
+  --eval-log-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/calvin_eval/day7_real_act_direct_cameras \
+  --cuda-device 0 \
+  --egl-policy direct-cameras \
+  --single-rollout-smoke \
+  --rollout-steps 60 \
+  2>&1 | tee logs/Day7/day7_real_act_direct_camera_rollout.log
+```
+
+Acceptance:
+
+- `day7_a_only_smoke500_final_check.log` reports `verdict: healthy`,
+  `observed_epoch=50`, checkpoint count greater than zero, and a WandB URL.
+- `day7_bridge_fidelity.log` reports exact/allclose bridge equivalence.
+- `day7_real_act_direct_camera_rollout.log` reaches
+  `single_rollout_smoke_result`, returns action shape `[7]`, and shows movement
+  evidence.
+
 ## Day 1 Checklist
 
 - Environment: `env_hw3_robot`, Python 3.12.

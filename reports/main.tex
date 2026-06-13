@@ -1,0 +1,71 @@
+\documentclass{article}
+
+\makeatletter
+\def\input@path{{reports/}{./}}
+\makeatother
+
+\usepackage[preprint]{neurips_2024}
+\usepackage[UTF8]{ctex}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage[numbers]{natbib}
+
+\title{HW3: Multi-Source 3D Asset Fusion and ACT Generalization on CALVIN}
+
+\author{%
+  Team HW3-DL-Spatial-Intelligence\\
+  Deep Learning and Spatial Intelligence\\
+  \texttt{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO：用 150--250 词概括两条主线。题目一写清多源 3D 资产、真实场景、表示融合与视频输出；题目二写清 CALVIN A-only 与 ABC 联合训练、环境 D zero-shot、ACT 与 LeRobot/CALVIN 工程链路。最终摘要需要补充核心数值结果、视频/图表产物和主要结论。
+\end{abstract}
+
+\section{Introduction}
+
+TODO：说明课程作业目标、两条题目主线、团队分工和最终交付物。写作重点包括：真实多视角重建、文本/单图生成 3D、空间融合渲染、以及机器人策略在未见环境中的泛化。这里应尽早补充为什么两条主线都强调空间表示、坐标系、数据接口和可复现工程。
+
+\section{Related Work}
+
+TODO：分三组梳理相关工作。第一组写 3D Gaussian Splatting、COLMAP 与新视角合成；第二组写 text-to-3D、image-to-3D、DreamFusion、Zero123、Stable Zero123 与 threestudio；第三组写 imitation learning、ACT、CALVIN benchmark、LeRobot 和语言条件长时程机器人任务。正式提交前核对 \texttt{reports/references.bib} 中的 BibTeX 信息。
+
+\section{Methods}
+
+\subsection{Topic 1: Multi-Source 3D Asset Fusion}
+
+TODO：描述 Topic 1 的完整方法链路。建议按真实物体 A、文本生成物体 B、单图重建物体 C、背景场景和融合渲染五段组织。需要明确每类资产的表示形式、坐标对齐方式、相机轨迹来源、Blender 或 pass-level 合成策略，以及当前 Week 1 已经验证的 3DGS / threestudio / Blender 环节。
+
+\subsection{Topic 2: ACT/CALVIN Cross-Environment Generalization}
+
+TODO：描述 Topic 2 的数据、训练和评测链路。数据部分写官方 \texttt{xiaoma26/calvin-lerobot} splitA/B/C/D，说明旧 \texttt{scene\_info.npy} 反推路线作为交叉验证证据。训练部分写 \texttt{run\_act\_train.py} 将 \texttt{state/actions/image/wrist\_image} 转为 LeRobot canonical keys，再训练 ACT。评测部分写 \texttt{LeRobotACTWrapper} 在 CALVIN Python 3.8 环境中调用 Python 3.12 worker 完成真实 ACT 推理。
+
+\section{Experiments}
+
+\subsection{Topic 1: 3D Reconstruction, Generation, and Fusion}
+
+TODO：列出 Topic 1 需要补齐的实验表格和图。至少包含 object\_A 3DGS 训练结果、counter 背景 3DGS 结果、threestudio smoke mesh、Blender 融合验证图、最终多视角视频截图。Week 1 已记录的 PSNR、截图和视频需要从飞书或服务器产物中整理到 \texttt{reports/figures/}。
+
+\subsection{Topic 2: ACT Training and CALVIN Rollout}
+
+TODO：列出 Topic 2 实验。Week 1 结果包括 A-only smoke500 50 epoch engineering baseline、loss 曲线、WandB run、checkpoint 数、bridge fidelity exact match、direct-cameras rollout smoke。正式结果还需要补 final A-only 与 ABC comparable-budget 训练、环境 D zero-shot 指标、失败案例和 EGL/fallback 评测说明。
+
+\section{Discussion}
+
+TODO：讨论两条主线的工程限制和实验解释。Topic 1 可讨论点云/高斯外观质量、mesh 与 Gaussian 表示接口、相机轨迹和融合真实性。Topic 2 可讨论 smoke500 baseline 与正式模型的区别、数据加载瓶颈、严格 EGL 阻塞、direct-cameras fallback 的可用范围、A-only 与 ABC 泛化比较的公平性。
+
+\section{Conclusion}
+
+TODO：总结最终交付。需要在终稿中明确两条主线是否都完成、主要结果、复现入口、模型权重位置、视频/图表位置，以及后续可改进方向。
+
+\nocite{*}
+\bibliographystyle{plainnat}
+\bibliography{reports/references}
+
+\end{document}

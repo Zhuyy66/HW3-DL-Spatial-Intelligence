@@ -1,0 +1,50 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_2024}[2026/06/14 lightweight NeurIPS-style local template]
+
+\newif\ifneuripsfinal
+\newif\ifneuripspreprint
+\newif\ifneuripsnonatbib
+
+\DeclareOption{final}{\neuripsfinaltrue}
+\DeclareOption{preprint}{\neuripspreprinttrue}
+\DeclareOption{nonatbib}{\neuripsnonatbibtrue}
+\ProcessOptions\relax
+
+\RequirePackage[margin=1in]{geometry}
+\RequirePackage{times}
+\RequirePackage{fancyhdr}
+\RequirePackage{titlesec}
+\RequirePackage{xcolor}
+
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{HW3: Deep Learning and Spatial Intelligence}
+\rhead{Week 1 Draft}
+\cfoot{\thepage}
+
+\titleformat{\section}{\large\bfseries}{\thesection}{0.75em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.75em}{}
+\titlespacing*{\section}{0pt}{1.5ex plus 0.5ex minus 0.2ex}{0.8ex}
+\titlespacing*{\subsection}{0pt}{1.2ex plus 0.4ex minus 0.2ex}{0.6ex}
+
+\renewcommand{\maketitle}{%
+  \begin{center}
+    {\LARGE\bfseries \@title \par}
+    \vspace{0.8em}
+    {\normalsize \@author \par}
+    \vspace{1.2em}
+  \end{center}
+  \ifneuripspreprint
+    \begin{center}
+      {\small Preprint-style course report draft.}
+    \end{center}
+  \fi
+  \vspace{0.5em}
+}
+
+\renewenvironment{abstract}{%
+  \centerline{\bfseries Abstract}
+  \begin{quote}\small
+}{%
+  \end{quote}
+}
