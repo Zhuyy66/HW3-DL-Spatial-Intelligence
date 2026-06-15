@@ -33,3 +33,17 @@ wandb/
 # OS files
 .DS_Store
 Thumbs.db
+
+# External repositories
+topic1_fusion/code/threestudio/
+topic1_fusion/code/gaussian-splatting/
+
+# Local caches
+.hf_cache/
+.torch/
+.pip_cache/
+.conda_pkgs/
+
+# Large outputs
+topic1_fusion/data/
+topic1_fusion/outputs/
