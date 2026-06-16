@@ -42,7 +42,7 @@ IMAGE_MAX = [[[1.0]], [[1.0]], [[1.0]]]
 SCRIPT_VERSION = 2
 DEFAULT_SEED = 20260529
 DEFAULT_CHUNK_SIZE = 1000
-REQUIRED_MAIN_ARGS = ("dataset_root", "episodes_file", "output_dir", "run_name", "epochs")
+REQUIRED_MAIN_ARGS = ("dataset_root", "episodes_file", "output_dir", "run_name")
 RUNTIME_ENV_DEFAULTS = {
     "NCCL_P2P_DISABLE": "1",
     "NCCL_IB_DISABLE": "1",
@@ -56,6 +56,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir")
     parser.add_argument("--run-name")
     parser.add_argument("--epochs", type=int)
+    parser.add_argument("--steps", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--dry-run-batches", type=int, default=0)
     parser.add_argument("--wandb-project", default=os.environ.get("WANDB_PROJECT", "hw3-topic2"))
@@ -68,6 +69,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-size", type=int, default=100)
     parser.add_argument("--n-action-steps", type=int, default=100)
     parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--prefetch-factor", type=int, default=2)
+    parser.add_argument("--persistent-workers", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--log-freq", type=int, default=100)
     parser.add_argument("--save-every-epoch", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--overwrite", action="store_true")
@@ -93,6 +96,24 @@ def read_json(path: Path) -> Any:
 def write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def merge_manifest_fields(path: Path, updates: dict[str, Any]) -> None:
+    if not path.exists():
+        return
+    try:
+        manifest = read_json(path)
+    except Exception as exc:  # noqa: BLE001 - audit writing should not mask training.
+        print(f"warning: failed to read manifest for audit merge: {path}: {exc}", flush=True)
+        return
+    manifest.update(updates)
+    write_json(path, manifest)
 
 
 def apply_runtime_env(env: MutableMapping[str, str] | None = None) -> dict[str, str]:
@@ -411,16 +432,29 @@ def compute_episode_frames(dataset_root: Path, selected: list[int]) -> tuple[int
     return sum(lengths.values()), lengths
 
 
+def parse_compact_number(raw_value: str) -> int | float:
+    suffix = raw_value[-1:].upper()
+    multiplier = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(suffix)
+    number_text = raw_value[:-1] if multiplier else raw_value
+    value = float(number_text) if any(char in number_text.lower() for char in (".", "e")) else int(number_text)
+    if multiplier:
+        value = value * multiplier
+        return int(value) if float(value).is_integer() else value
+    return value
+
+
 def parse_metric_line(line: str) -> dict[str, Any] | None:
     stripped = strip_ansi(line)
     if "loss" not in stripped or "step" not in stripped:
         return None
     metrics: dict[str, Any] = {"raw": stripped}
-    for key, raw_value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*):\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)", stripped):
+    for key, raw_value in re.findall(
+        r"([A-Za-z_][A-Za-z0-9_]*):\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?[KMBkmb]?)",
+        stripped,
+    ):
         normalized = {"epch": "epoch", "grdn": "grad_norm"}.get(key, key)
         try:
-            value: int | float
-            value = int(raw_value) if re.fullmatch(r"[-+]?\d+", raw_value) else float(raw_value)
+            value = parse_compact_number(raw_value)
         except ValueError:
             continue
         metrics[normalized] = value
@@ -483,6 +517,47 @@ def worker_config_to_train_cfg(config: dict[str, Any]):
     )
 
 
+def install_dataloader_audit_patch(config: dict[str, Any]):
+    import torch
+
+    original_dataloader = torch.utils.data.DataLoader
+    audit_path = Path(config["dataloader_audit_path"]) if config.get("dataloader_audit_path") else None
+    manifest_path = Path(config["manifest_path"]) if config.get("manifest_path") else None
+    prefetch_factor = int(config.get("dataloader_prefetch_factor", 2))
+    use_persistent_workers = bool(config.get("dataloader_persistent_workers", False))
+    audits: list[dict[str, Any]] = []
+
+    class AuditedDataLoader(original_dataloader):  # type: ignore[misc, valid-type]
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            num_workers = int(kwargs.get("num_workers") or 0)
+            if num_workers > 0:
+                kwargs["prefetch_factor"] = prefetch_factor
+                if use_persistent_workers:
+                    kwargs["persistent_workers"] = True
+            audit = {
+                "event": "dataloader_monkeypatch_audit",
+                "captured_at": utc_now(),
+                "num_workers": num_workers,
+                "batch_size": kwargs.get("batch_size"),
+                "prefetch_factor": kwargs.get("prefetch_factor"),
+                "persistent_workers": bool(kwargs.get("persistent_workers", False)),
+                "pin_memory": bool(kwargs.get("pin_memory", False)),
+                "drop_last": bool(kwargs.get("drop_last", False)),
+                "sampler_type": type(kwargs.get("sampler")).__name__ if kwargs.get("sampler") is not None else None,
+                "shuffle": kwargs.get("shuffle"),
+            }
+            audits.append(audit)
+            print(f"dataloader_monkeypatch_audit: {json.dumps(audit, ensure_ascii=False, sort_keys=True)}", flush=True)
+            if audit_path:
+                append_jsonl(audit_path, audit)
+            if manifest_path:
+                merge_manifest_fields(manifest_path, {"dataloader_monkeypatch_audits": audits})
+            super().__init__(*args, **kwargs)
+
+    torch.utils.data.DataLoader = AuditedDataLoader
+    return torch, original_dataloader
+
+
 def run_worker(config_path: Path) -> int:
     runtime_env = apply_runtime_env()
     print(f"starting LeRobot worker from {config_path}; runtime_env={json.dumps(runtime_env, sort_keys=True)}", flush=True)
@@ -491,7 +566,11 @@ def run_worker(config_path: Path) -> int:
 
     config = read_json(config_path)
     train_cfg = worker_config_to_train_cfg(config)
-    train(train_cfg)
+    torch_module, original_dataloader = install_dataloader_audit_patch(config)
+    try:
+        train(train_cfg)
+    finally:
+        torch_module.utils.data.DataLoader = original_dataloader
     return 0
 
 
@@ -526,7 +605,7 @@ def stream_worker(worker_config_path: Path, metrics_path: Path, manifest_path: P
             if url:
                 wandb_url = url
                 manifest["wandb_url"] = wandb_url
-                write_json(manifest_path, manifest)
+                merge_manifest_fields(manifest_path, {"wandb_url": wandb_url})
 
         return_code = proc.wait()
 
@@ -553,10 +632,20 @@ def main() -> int:
 
     runtime_env = apply_runtime_env()
 
-    if args.epochs <= 0:
+    if args.epochs is None and args.steps is None and not args.dry_run_batches:
+        raise ValueError("one of --epochs, --steps, or --dry-run-batches must be provided")
+    if args.epochs is not None and args.epochs <= 0:
         raise ValueError("--epochs must be positive")
+    if args.steps is not None and args.steps <= 0:
+        raise ValueError("--steps must be positive")
     if args.batch_size <= 0:
         raise ValueError("--batch-size must be positive")
+    if args.num_workers < 0:
+        raise ValueError("--num-workers cannot be negative")
+    if args.prefetch_factor <= 0:
+        raise ValueError("--prefetch-factor must be positive")
+    if args.persistent_workers and args.num_workers <= 0:
+        raise ValueError("--persistent-workers requires --num-workers > 0")
     if args.dry_run_batches < 0:
         raise ValueError("--dry-run-batches cannot be negative")
 
@@ -581,12 +670,25 @@ def main() -> int:
 
     frame_count, episode_lengths = compute_episode_frames(dataset_root, selected)
     steps_per_epoch = math.ceil(frame_count / args.batch_size)
-    planned_steps = args.dry_run_batches if args.dry_run_batches else steps_per_epoch * args.epochs
-    save_freq = planned_steps if args.dry_run_batches else (steps_per_epoch if args.save_every_epoch else planned_steps)
+    if args.dry_run_batches:
+        planned_steps = args.dry_run_batches
+        step_budget_source = "dry_run_batches"
+    elif args.steps is not None:
+        planned_steps = args.steps
+        step_budget_source = "steps"
+    else:
+        planned_steps = steps_per_epoch * int(args.epochs)
+        step_budget_source = "epochs"
+    save_freq = (
+        steps_per_epoch
+        if step_budget_source == "epochs" and args.save_every_epoch
+        else planned_steps
+    )
     log_freq = min(max(1, args.log_freq), planned_steps)
 
     manifest_path = run_dir / "run_manifest.json"
     metrics_path = run_dir / "metrics.jsonl"
+    dataloader_audit_path = run_dir / "dataloader_audit.jsonl"
     worker_config_path = run_dir / "actual_training_config.json"
     worker_config = {
         "run_name": args.run_name,
@@ -594,6 +696,8 @@ def main() -> int:
         "prepared_dataset_root": str(prepared_root),
         "train_output_dir": str(train_output_dir),
         "epochs": args.epochs,
+        "requested_steps": args.steps,
+        "step_budget_source": step_budget_source,
         "batch_size": args.batch_size,
         "steps": planned_steps,
         "steps_per_epoch": steps_per_epoch,
@@ -604,6 +708,10 @@ def main() -> int:
         "chunk_size": args.chunk_size,
         "n_action_steps": args.n_action_steps,
         "num_workers": args.num_workers,
+        "dataloader_prefetch_factor": args.prefetch_factor,
+        "dataloader_persistent_workers": args.persistent_workers,
+        "dataloader_audit_path": str(dataloader_audit_path),
+        "manifest_path": str(manifest_path),
         "log_freq": log_freq,
         "save_freq": save_freq,
         "wandb_enabled": not args.disable_wandb,
@@ -624,9 +732,15 @@ def main() -> int:
         "selected_episode_length_max": max(episode_lengths.values()),
         "batch_size": args.batch_size,
         "epochs": args.epochs,
+        "requested_steps": args.steps,
+        "step_budget_source": step_budget_source,
         "steps_per_epoch": steps_per_epoch,
         "planned_steps": planned_steps,
         "dry_run_batches": args.dry_run_batches,
+        "num_workers": args.num_workers,
+        "dataloader_prefetch_factor": args.prefetch_factor,
+        "dataloader_persistent_workers": args.persistent_workers,
+        "dataloader_audit_path": str(dataloader_audit_path),
         "prepared_dataset_manifest": prepared_manifest,
         "prepared_dataset_root": str(prepared_root),
         "train_output_dir": str(train_output_dir),
@@ -641,6 +755,8 @@ def main() -> int:
     return_code = stream_worker(worker_config_path, metrics_path, manifest_path, manifest)
     elapsed = time.monotonic() - started
 
+    if manifest_path.exists():
+        manifest = read_json(manifest_path)
     manifest.update(
         {
             "finished_at": utc_now(),
@@ -648,7 +764,9 @@ def main() -> int:
             "return_code": return_code,
             "status": "completed" if return_code == 0 else "failed",
             "checkpoints": find_checkpoints(run_dir),
-            "seconds_per_epoch_observed": elapsed / args.epochs if not args.dry_run_batches else None,
+            "seconds_per_epoch_observed": (
+                elapsed / args.epochs if args.epochs and step_budget_source == "epochs" else None
+            ),
             "seconds_per_step_observed": elapsed / planned_steps if planned_steps else None,
         }
     )

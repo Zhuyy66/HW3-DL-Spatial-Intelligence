@@ -8,6 +8,7 @@ import math
 import os
 import re
 import signal
+import statistics
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,6 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-checkpoint", action="store_true")
     parser.add_argument("--require-wandb", action="store_true")
     parser.add_argument("--loss-window", type=int, default=20)
+    parser.add_argument("--baseline-seconds-per-step", type=float, default=None)
+    parser.add_argument("--io-window", type=int, default=20)
     return parser.parse_args()
 
 
@@ -84,16 +87,29 @@ def strip_ansi(text: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", text)
 
 
+def parse_compact_number(raw_value: str) -> int | float:
+    suffix = raw_value[-1:].upper()
+    multiplier = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(suffix)
+    number_text = raw_value[:-1] if multiplier else raw_value
+    value = float(number_text) if any(char in number_text.lower() for char in (".", "e")) else int(number_text)
+    if multiplier:
+        value = value * multiplier
+        return int(value) if float(value).is_integer() else value
+    return value
+
+
 def parse_metric_line(line: str) -> dict[str, Any] | None:
     clean = strip_ansi(line)
     if "loss" not in clean or "step" not in clean:
         return None
     row: dict[str, Any] = {"raw": clean}
-    for key, raw_value in re.findall(r"([A-Za-z_][A-Za-z0-9_]*):\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)", clean):
+    for key, raw_value in re.findall(
+        r"([A-Za-z_][A-Za-z0-9_]*):\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?[KMBkmb]?)",
+        clean,
+    ):
         normalized = {"epch": "epoch", "grdn": "grad_norm"}.get(key, key)
         try:
-            value: int | float
-            value = int(raw_value) if re.fullmatch(r"[-+]?\d+", raw_value) else float(raw_value)
+            value = parse_compact_number(raw_value)
         except ValueError:
             continue
         row[normalized] = value
@@ -162,7 +178,7 @@ def checkpoint_files(run_dir: Path) -> list[Path]:
 def collect_metrics(run_dir: Path, log_text: str) -> list[dict[str, Any]]:
     metrics = read_jsonl(run_dir / "metrics.jsonl")
     parsed_from_log = [row for row in (parse_metric_line(line) for line in log_text.splitlines()) if row]
-    if parsed_from_log and len(parsed_from_log) > len(metrics):
+    if parsed_from_log and len(parsed_from_log) >= len(metrics):
         return parsed_from_log
     return metrics
 
@@ -194,6 +210,58 @@ def max_epoch(metrics: list[dict[str, Any]], manifest: dict[str, Any]) -> float:
 
 def average(values: list[float]) -> float:
     return sum(values) / len(values)
+
+
+def metric_values(metrics: list[dict[str, Any]], key: str) -> list[float]:
+    values: list[float] = []
+    for row in metrics:
+        value = row.get(key)
+        if isinstance(value, (int, float)) and math.isfinite(float(value)):
+            values.append(float(value))
+    return values
+
+
+def metric_pair_sums(metrics: list[dict[str, Any]], left_key: str, right_key: str) -> list[float]:
+    values: list[float] = []
+    for row in metrics:
+        left = row.get(left_key)
+        right = row.get(right_key)
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            total = float(left) + float(right)
+            if math.isfinite(total):
+                values.append(total)
+    return values
+
+
+def summarize_values(values: list[float], *, window: int) -> dict[str, Any]:
+    if not values:
+        return {"count": 0}
+    window_values = values[-max(1, min(window, len(values))) :]
+    return {
+        "count": len(values),
+        "mean": average(values),
+        "median": statistics.median(values),
+        "min": min(values),
+        "max": max(values),
+        "last": values[-1],
+        "recent_window_count": len(window_values),
+        "recent_window_mean": average(window_values),
+        "recent_window_median": statistics.median(window_values),
+        "recent_window_min": min(window_values),
+        "recent_window_max": max(window_values),
+    }
+
+
+def compare_to_baseline(value: float | None, baseline: float | None) -> dict[str, Any] | None:
+    if value is None or baseline is None or baseline <= 0:
+        return None
+    return {
+        "baseline_seconds_per_step": baseline,
+        "seconds_per_step": value,
+        "delta_seconds_per_step": value - baseline,
+        "ratio_to_baseline": value / baseline,
+        "speedup_x": baseline / value if value > 0 else None,
+    }
 
 
 def loss_health(losses: list[float], *, window: int) -> tuple[bool, str]:
@@ -232,6 +300,9 @@ def main() -> int:
 
     metrics = collect_metrics(run_dir, log_text)
     losses = finite_losses(metrics)
+    data_s_values = metric_values(metrics, "data_s")
+    updt_s_values = metric_values(metrics, "updt_s")
+    metric_total_s_values = metric_pair_sums(metrics, "data_s", "updt_s")
     checkpoints = checkpoint_files(run_dir)
     wandb_url = manifest.get("wandb_url") or parse_wandb_url(log_text or "")
     running, pid_detail = pid_running(Path(args.pid_file) if args.pid_file else None)
@@ -276,6 +347,13 @@ def main() -> int:
     required_failures = [check for check in checks if check.required and not check.ok]
     pending = bool(args.min_epochs and observed_epoch < args.min_epochs and running)
     verdict = "healthy" if not required_failures else ("pending" if pending else "unhealthy")
+    wall_clock_seconds_per_step = manifest.get("seconds_per_step_observed")
+    if not isinstance(wall_clock_seconds_per_step, (int, float)):
+        wall_clock_seconds_per_step = None
+    metric_total_recent = summarize_values(metric_total_s_values, window=args.io_window)
+    metric_recent_seconds_per_step = metric_total_recent.get("recent_window_mean")
+    if not isinstance(metric_recent_seconds_per_step, (int, float)):
+        metric_recent_seconds_per_step = None
 
     summary = {
         "verdict": verdict,
@@ -289,6 +367,18 @@ def main() -> int:
         "loss_last": losses[-1] if losses else None,
         "loss_min": min(losses) if losses else None,
         "loss_max": max(losses) if losses else None,
+        "wall_clock_seconds_per_step": wall_clock_seconds_per_step,
+        "data_s": summarize_values(data_s_values, window=args.io_window),
+        "updt_s": summarize_values(updt_s_values, window=args.io_window),
+        "metric_data_plus_update_s": metric_total_recent,
+        "wall_clock_baseline_comparison": compare_to_baseline(
+            wall_clock_seconds_per_step,
+            args.baseline_seconds_per_step,
+        ),
+        "metric_recent_baseline_comparison": compare_to_baseline(
+            metric_recent_seconds_per_step,
+            args.baseline_seconds_per_step,
+        ),
         "checkpoint_count": len(checkpoints),
         "wandb_url": wandb_url,
         "recent_error_lines": recent_errors,

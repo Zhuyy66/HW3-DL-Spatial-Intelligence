@@ -264,6 +264,250 @@ Acceptance criteria:
 - `topic2_act/docs/day3_data_audit.md` documents that the old reverse split is retired.
 - tracked split definitions are available under `topic2_act/dataset_split/xiaoma26_calvin_lerobot/`.
 
+## Week 3 Day 1 DataLoader Benchmark Runbook
+
+Goal: reduce the ACT training input bottleneck before full A-only and ABC
+training. The current reference run has `data_s` around `0.31`, `updt_s`
+around `0.075`, and manifest wall-clock `seconds_per_step_observed=0.397`.
+
+Source check for LeRobot `0.4.0`:
+
+- `TrainPipelineConfig.num_workers` is an exposed training config field, so
+  `run_act_train.py --num-workers ...` reaches LeRobot directly.
+- `prefetch_factor` is hard-coded in `lerobot_train.py` as
+  `prefetch_factor=2 if cfg.num_workers > 0 else None`.
+- `persistent_workers` is not exposed and is not passed into DataLoader.
+- `run_act_train.py` applies a process-local DataLoader audit patch inside the
+  worker process. The patch logs the final DataLoader parameters and stores
+  them in `run_manifest.json` plus `dataloader_audit.jsonl`.
+
+Acceptance:
+
+- Each benchmark log must contain `dataloader_monkeypatch_audit` with the
+  expected `num_workers`, `prefetch_factor`, and `persistent_workers` values.
+- The worker-process check should show DataLoader subprocesses during a running
+  benchmark.
+- A config is accepted only if measured `data_s` drops from the previous
+  `~0.31` reference and total step time is below `0.397 s/step`.
+- If the best config remains above `0.3 s/step`, stop tuning and downshift the
+  final fixed step budget according to the Week 3 plan.
+
+### Setup and CUDA Check
+
+Use `tee` for short setup commands so the terminal remains readable.
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+mkdir -p logs/Week3_Day1 topic2_act/outputs/act_calvin_dataloader
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_robot
+
+python topic2_act/scripts/select_training_gpu.py \
+  --candidate-gpus 0,1,2,4,6,7 \
+  --large-gpus 3,5 \
+  --batch-size 8 \
+  --min-free-mib 9000 \
+  --allow-large-gpus \
+  --downgrade-batches 4,2 \
+  --write-env logs/Week3_Day1/day1_gpu.env \
+  2>&1 | tee logs/Week3_Day1/day1_select_gpu.log
+
+source logs/Week3_Day1/day1_gpu.env
+source scripts/activate_cuda_driver_shim.sh "$HW3_GPU_ID" \
+  > >(tee logs/Week3_Day1/day1_cuda_driver_shim.log) 2>&1
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+
+python topic2_act/scripts/verify_act_import.py --require-cuda \
+  2>&1 | tee logs/Week3_Day1/day1_verify_act_import.log
+
+python - <<'PY' 2>&1 | tee logs/Week3_Day1/day1_lerobot_train_defaults.log
+from lerobot.configs.train import TrainPipelineConfig
+cfg = TrainPipelineConfig
+print("TrainPipelineConfig.num_workers_default=", cfg.num_workers)
+print("TrainPipelineConfig.batch_size_default=", cfg.batch_size)
+print("TrainPipelineConfig.steps_default=", cfg.steps)
+print("TrainPipelineConfig.log_freq_default=", cfg.log_freq)
+print("TrainPipelineConfig.save_freq_default=", cfg.save_freq)
+PY
+```
+
+Expected default anchor: LeRobot `0.4.0` uses `steps=100000` in
+`TrainPipelineConfig`.
+
+### Full SplitA Cache Probe
+
+Run once if the full splitA canonical v3 cache is absent or stale. This command
+is backgrounded because conversion can take a while.
+
+```bash
+nohup bash -lc '
+set -eo pipefail
+cd /root/Test/Zhr/DL/HW3
+source /opt/conda/etc/profile.d/conda.sh
+conda activate env_hw3_robot
+source logs/Week3_Day1/day1_gpu.env
+source scripts/activate_cuda_driver_shim.sh "$HW3_GPU_ID"
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+python topic2_act/scripts/run_act_train.py \
+  --dataset-root /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot/splitA \
+  --episodes-file /root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_A_full.json \
+  --output-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin_dataloader/splitA_prep_probe \
+  --run-name act_calvin_splitA_prep_probe \
+  --epochs 1 \
+  --dry-run-batches 2 \
+  --batch-size "$HW3_BATCH_SIZE" \
+  --num-workers 4 \
+  --prefetch-factor 2 \
+  --no-persistent-workers \
+  --disable-wandb \
+  --rebuild-prepared-dataset \
+  --overwrite
+' > logs/Week3_Day1/day1_splitA_prep_probe.log 2>&1 &
+echo $! > logs/Week3_Day1/day1_splitA_prep_probe.pid
+tail -f logs/Week3_Day1/day1_splitA_prep_probe.log
+```
+
+After it finishes:
+
+```bash
+python topic2_act/scripts/summarize_act_run.py \
+  --run-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin_dataloader/splitA_prep_probe \
+  --log-file logs/Week3_Day1/day1_splitA_prep_probe.log \
+  --baseline-seconds-per-step 0.397 \
+  2>&1 | tee logs/Week3_Day1/day1_splitA_prep_probe_summary.log
+```
+
+### Steps-Only Argument Preflight
+
+Run this before the 2000-step sweep to confirm the wrapper accepts fixed-step
+budgets without `--epochs`.
+
+```bash
+python - <<'PY' 2>&1 | tee logs/Week3_Day1/day1_argparse_steps_only_check.log
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("topic2_act/scripts").resolve()))
+import run_act_train
+
+sys.argv = [
+    "run_act_train.py",
+    "--dataset-root", "/tmp/dummy_dataset",
+    "--episodes-file", "/tmp/dummy_episodes.json",
+    "--output-dir", "/tmp/dummy_output",
+    "--run-name", "argparse_steps_only",
+    "--steps", "2000",
+]
+args = run_act_train.parse_args()
+print("steps=", args.steps)
+print("epochs=", args.epochs)
+assert args.steps == 2000 and args.epochs is None
+print("OK: steps-only parse accepted")
+PY
+```
+
+### 2000-Step Benchmark Sweep
+
+Start with a baseline equivalent to the previous settings, then compare worker
+and prefetch candidates. Keep WandB disabled for these timing runs.
+
+```bash
+for spec in nw4_pf2_np nw8_pf4_p nw12_pf4_p nw16_pf4_p; do
+  case "$spec" in
+    nw4_pf2_np)  NW=4;  PF=2; PERSIST="--no-persistent-workers" ;;
+    nw8_pf4_p)   NW=8;  PF=4; PERSIST="--persistent-workers" ;;
+    nw12_pf4_p)  NW=12; PF=4; PERSIST="--persistent-workers" ;;
+    nw16_pf4_p)  NW=16; PF=4; PERSIST="--persistent-workers" ;;
+  esac
+
+  nohup bash -lc "
+  set -eo pipefail
+  cd /root/Test/Zhr/DL/HW3
+  source /opt/conda/etc/profile.d/conda.sh
+  conda activate env_hw3_robot
+  source logs/Week3_Day1/day1_gpu.env
+  source scripts/activate_cuda_driver_shim.sh \"\$HW3_GPU_ID\"
+  export NCCL_P2P_DISABLE=1
+  export NCCL_IB_DISABLE=1
+  python topic2_act/scripts/run_act_train.py \
+    --dataset-root /root/Test/Zhr/DL/HW3/topic2_act/data/xiaoma26_calvin_lerobot/splitA \
+    --episodes-file /root/Test/Zhr/DL/HW3/topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_A_full.json \
+    --output-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin_dataloader/splitA_${spec}_2k_fix1 \
+    --run-name act_calvin_splitA_${spec}_2k_fix1 \
+    --steps 2000 \
+    --batch-size \"\$HW3_BATCH_SIZE\" \
+    --num-workers $NW \
+    --prefetch-factor $PF \
+    $PERSIST \
+    --disable-wandb \
+    --overwrite
+  " > logs/Week3_Day1/day1_splitA_${spec}_2k_fix1.log 2>&1 &
+  echo $! > logs/Week3_Day1/day1_splitA_${spec}_2k_fix1.pid
+  echo "started $spec pid=$(cat logs/Week3_Day1/day1_splitA_${spec}_2k_fix1.pid)"
+  sleep 20
+  ps -eo pid,ppid,stat,cmd \
+    | grep -E "run_act_train.py|DataLoader|pt_data_worker|python" \
+    | grep -v grep \
+    2>&1 | tee logs/Week3_Day1/day1_splitA_${spec}_2k_fix1_worker_ps.log
+  wait "$(cat logs/Week3_Day1/day1_splitA_${spec}_2k_fix1.pid)"
+done
+```
+
+Summarize every candidate:
+
+```bash
+for spec in nw4_pf2_np nw8_pf4_p nw12_pf4_p nw16_pf4_p; do
+  python topic2_act/scripts/summarize_act_run.py \
+    --run-dir /root/Test/Zhr/DL/HW3/topic2_act/outputs/act_calvin_dataloader/splitA_${spec}_2k_fix1 \
+    --log-file logs/Week3_Day1/day1_splitA_${spec}_2k_fix1.log \
+    --baseline-seconds-per-step 0.397 \
+    --io-window 20 \
+    2>&1 | tee logs/Week3_Day1/day1_splitA_${spec}_2k_fix1_summary.log
+done
+```
+
+Check the audit lines explicitly:
+
+```bash
+grep -H "dataloader_monkeypatch_audit" logs/Week3_Day1/day1_splitA_*_2k_fix1.log \
+  2>&1 | tee logs/Week3_Day1/day1_dataloader_audit_lines_fix1.log
+```
+
+Completed benchmark results:
+
+| Config | DataLoader settings | wall s/step | data_s | updt_s | wall speedup vs 0.397 |
+|---|---|---:|---:|---:|---:|
+| `nw4_pf2_np` | `num_workers=4`, `prefetch_factor=2`, `persistent_workers=False` | 0.4030 | 0.32345 | 0.07340 | 0.99x |
+| `nw8_pf4_p` | `num_workers=8`, `prefetch_factor=4`, `persistent_workers=True` | 0.2110 | 0.13300 | 0.07095 | 1.88x |
+| `nw12_pf4_p` | `num_workers=12`, `prefetch_factor=4`, `persistent_workers=True` | 0.1460 | 0.06930 | 0.06950 | 2.72x |
+| `nw16_pf4_p` | `num_workers=16`, `prefetch_factor=4`, `persistent_workers=True` | 0.1135 | 0.04045 | 0.06580 | 3.50x |
+
+Selected config for subsequent full-budget runs:
+
+```bash
+--num-workers 16 --prefetch-factor 4 --persistent-workers
+```
+
+The selected config reduced wall-clock time from the `0.397 s/step` reference
+to `0.1135 s/step`, and reduced `data_s` from about `0.31` to `0.04045`.
+All four fixed-step runs completed with `planned_steps=2000`,
+`step_budget_source=steps`, and return code `0`. The audit log confirmed the
+requested DataLoader parameters, and the worker `ps` logs showed 4 / 8 / 12 /
+16 child worker processes respectively.
+
+LeRobot `0.4.0` default anchor from the server environment:
+
+- `TrainPipelineConfig.steps_default=100000`
+- `TrainPipelineConfig.log_freq_default=200`
+- `TrainPipelineConfig.save_freq_default=20000`
+
+Decision: the best measured step time is below `0.15 s/step`, so the Day 1
+`>0.3 s/step` risk fallback is not triggered. The Week 3 fixed-step budget can
+be set as high as `150K` if the downstream schedule allows it, with A-only and
+ABC kept at the exact same total number of gradient steps.
+
 ## Day 4 ACT Training Runbook
 
 Day 4 uses a two-stage A-only schedule:
