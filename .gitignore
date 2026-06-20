@@ -22,6 +22,14 @@ outputs/
 *.zip
 *.tar
 *.tar.gz
+*.blend
+*.obj
+*.mtl
+*.png
+*.jpg
+*.jpeg
+*.safetensors
+*.wandb
 
 # Cache
 .hf_cache/
@@ -29,6 +37,7 @@ outputs/
 .pip_cache/
 .cache/
 wandb/
+hf_home/
 
 # OS files
 .DS_Store
@@ -37,6 +46,7 @@ Thumbs.db
 # External repositories
 topic1_fusion/code/threestudio/
 topic1_fusion/code/gaussian-splatting/
+third_party/
 
 # Local caches
 .hf_cache/
@@ -47,3 +57,15 @@ topic1_fusion/code/gaussian-splatting/
 # Large outputs
 topic1_fusion/data/
 topic1_fusion/outputs/
+topic1_fusion/pretrained/
+topic1_fusion/models/
+
+# Keep only lightweight report figures tracked by default.
+reports/topic1_week1_urgent_share.zip
+
+# Allow small docs/scripts/manifests to be tracked normally.
+!reports/figures/.gitkeep
+!reports/figures/**/MANIFEST.md
+!reports/figures/**/*.png
+!reports/figures/**/*.jpg
+!reports/figures/**/*.jpeg

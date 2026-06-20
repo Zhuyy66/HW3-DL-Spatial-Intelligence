@@ -123,13 +123,13 @@ Open issue:
 
 ### Threestudio DreamFusion Hamburger
 
-- Smoke output: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-smoke/hamburger_100step_20260602_v2/`
-- Full output: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full/hamburger_full_20260603/`
-- Full validation image: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-0.png`
-- Full test video: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-test.mp4`
-- Exported mesh: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/model.obj`
-- Exported material: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/model.mtl`
-- Exported texture: `/root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/texture_kd.jpg`
+- Smoke output: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-smoke/hamburger_100step_20260602_v2/`
+- Full output: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/`
+- Full validation image: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-0.png`
+- Full test video: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-test.mp4`
+- Exported mesh: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/model.obj`
+- Exported material: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/model.mtl`
+- Exported texture: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/texture_kd.jpg`
 - W&B run id: `0w5yldmf`
 
 Commands:
@@ -140,8 +140,15 @@ bash /root/HW3/topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh
 
 ```bash
 nohup bash /root/HW3/topic1_fusion/scripts/run_dreamfusion_sd15_full.sh \
-  > /root/HW3/topic1_fusion/code/threestudio/outputs/dreamfusion-sd15-full_hamburger_20260603.nohup.log 2>&1 &
+  > /root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full_hamburger_20260603.nohup.log 2>&1 &
 ```
+
+## Cleanup Notes
+
+- threestudio experiment outputs and W&B folders are now unified under `/root/HW3/topic1_fusion/outputs/threestudio/`.
+- Compatibility symlinks remain at `/root/HW3/topic1_fusion/code/threestudio/outputs` and `/root/HW3/topic1_fusion/code/threestudio/wandb`.
+- Manual Blender cleanup asset for object_A is now stored at `/root/HW3/topic1_fusion/outputs/object_A_assets/object_A_clean.blend`.
+- Dense meshing caches under `outputs/counter_colmap_dense/` and `outputs/object_A_colmap_dense/` were slimmed down by removing regenerable `images/` and `stereo/` directories while keeping fused point clouds and final mesh files.
 
 ## Next Fixes
 
