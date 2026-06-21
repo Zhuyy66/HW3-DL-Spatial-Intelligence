@@ -10,6 +10,7 @@ using LeRobot's official converter, then calls the official training function.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import math
@@ -39,7 +40,7 @@ IMAGENET_IMAGE_STATS = {
 }
 IMAGE_MIN = [[[0.0]], [[0.0]], [[0.0]]]
 IMAGE_MAX = [[[1.0]], [[1.0]], [[1.0]]]
-SCRIPT_VERSION = 2
+SCRIPT_VERSION = 3
 DEFAULT_SEED = 20260529
 DEFAULT_CHUNK_SIZE = 1000
 REQUIRED_MAIN_ARGS = ("dataset_root", "episodes_file", "output_dir", "run_name")
@@ -72,7 +73,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prefetch-factor", type=int, default=2)
     parser.add_argument("--persistent-workers", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--log-freq", type=int, default=100)
+    parser.add_argument("--save-freq", type=int, default=None)
     parser.add_argument("--save-every-epoch", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--allow-datasets-disk-check-bypass",
+        action="store_true",
+        help="Temporarily bypass HuggingFace Datasets local disk-space precheck inside the LeRobot worker.",
+    )
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--repo-id", default="hw3/calvin-splitA-canonical")
     parser.add_argument("--_worker-config", default=None, help=argparse.SUPPRESS)
@@ -123,6 +130,26 @@ def apply_runtime_env(env: MutableMapping[str, str] | None = None) -> dict[str, 
     return {key: target[key] for key in RUNTIME_ENV_DEFAULTS}
 
 
+@contextlib.contextmanager
+def datasets_disk_check_bypass(enabled: bool):
+    if not enabled:
+        yield False
+        return
+
+    import datasets.builder as datasets_builder
+
+    original = datasets_builder.has_sufficient_disk_space
+
+    def _always_enough_disk_space(*_args: Any, **_kwargs: Any) -> bool:
+        return True
+
+    datasets_builder.has_sufficient_disk_space = _always_enough_disk_space
+    try:
+        yield True
+    finally:
+        datasets_builder.has_sufficient_disk_space = original
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     with path.open("r", encoding="utf-8-sig") as file:
@@ -160,6 +187,10 @@ def safe_remove_tree(path: Path, *, allowed_parent: Path) -> None:
         raise ValueError(f"refusing to remove {resolved}; it is not under {parent}")
     if path.exists():
         shutil.rmtree(path)
+
+
+def same_resolved_path(left: Path, right: Path) -> bool:
+    return left.resolve() == right.resolve()
 
 
 def default_prepared_root(dataset_root: Path, episodes_file: Path) -> Path:
@@ -237,6 +268,32 @@ def manifest_matches(path: Path, expected_hash: str) -> bool:
     except Exception:
         return False
     return info.get("codebase_version") == "v3.0" and manifest.get("input_hash") == expected_hash
+
+
+def read_v3_episode_lengths(dataset_root: Path) -> dict[int, int]:
+    import pandas as pd
+
+    episode_files = sorted((dataset_root / "meta" / "episodes").glob("chunk-*/*.parquet"))
+    if not episode_files:
+        raise FileNotFoundError(f"no v3 episode metadata parquet files found under {dataset_root / 'meta' / 'episodes'}")
+    frames = [pd.read_parquet(path, columns=["episode_index", "length"]) for path in episode_files]
+    episodes = pd.concat(frames, ignore_index=True)
+    required = {"episode_index", "length"}
+    missing = sorted(required - set(episodes.columns))
+    if missing:
+        raise ValueError(f"v3 episode metadata missing columns {missing}")
+    lengths = {int(row["episode_index"]): int(row["length"]) for row in episodes.to_dict("records")}
+    if len(lengths) != len(episodes):
+        raise ValueError("v3 episode metadata contains duplicate episode_index values")
+    return lengths
+
+
+def selected_v3_episode_lengths(dataset_root: Path, selected: list[int]) -> dict[int, int]:
+    lengths = read_v3_episode_lengths(dataset_root)
+    missing = [idx for idx in selected if idx not in lengths]
+    if missing:
+        raise ValueError(f"episodes file references missing v3 episodes; first missing={missing[:10]}")
+    return {idx: lengths[idx] for idx in selected}
 
 
 def materialize_canonical_v21_subset(
@@ -376,6 +433,7 @@ def prepare_dataset(
         raise ValueError("episodes file is empty")
 
     source_info = read_json(dataset_root / "meta" / "info.json")
+    source_codebase_version = str(source_info.get("codebase_version") or "")
     input_hash = stable_hash(
         {
             "script_version": SCRIPT_VERSION,
@@ -386,6 +444,40 @@ def prepare_dataset(
             "field_mapping": FIELD_MAPPING,
         }
     )
+    prepared_is_source = same_resolved_path(dataset_root, prepared_root)
+
+    if source_codebase_version == "v3.0":
+        if not prepared_is_source:
+            raise RuntimeError(
+                "v3 dataset roots must be used with --prepared-dataset-root equal to --dataset-root; "
+                f"got dataset_root={dataset_root} prepared_root={prepared_root}"
+            )
+        if rebuild:
+            raise RuntimeError("refusing --rebuild-prepared-dataset for v3 passthrough input")
+        selected_lengths = selected_v3_episode_lengths(dataset_root, selected)
+        manifest = {
+            "generated_at": utc_now(),
+            "script_version": SCRIPT_VERSION,
+            "input_hash": input_hash,
+            "source_dataset_root": str(dataset_root),
+            "source_codebase_version": source_codebase_version,
+            "episodes_file": str(episodes_file),
+            "selected_episode_count": len(selected),
+            "selected_frame_count": sum(selected_lengths.values()),
+            "prepared_root": str(prepared_root),
+            "prepared_dataset_passthrough": True,
+            "field_mapping": FIELD_MAPPING,
+            "elapsed_seconds": 0.0,
+        }
+        write_json(prepared_root / ".hw3_prepare_manifest.json", manifest)
+        print(f"ok: using existing LeRobot v3 dataset via passthrough at {prepared_root}", flush=True)
+        return prepared_root, selected, manifest
+
+    if prepared_is_source:
+        raise RuntimeError(
+            "refusing to prepare a non-v3 dataset in place; choose a separate --prepared-dataset-root "
+            f"for dataset_root={dataset_root}"
+        )
 
     if manifest_matches(prepared_root, input_hash) and not rebuild:
         manifest = read_json(prepared_root / ".hw3_prepare_manifest.json")
@@ -415,9 +507,11 @@ def prepare_dataset(
         "script_version": SCRIPT_VERSION,
         "input_hash": input_hash,
         "source_dataset_root": str(dataset_root),
+        "source_codebase_version": source_codebase_version,
         "episodes_file": str(episodes_file),
         "selected_episode_count": len(selected),
         "prepared_root": str(prepared_root),
+        "prepared_dataset_passthrough": False,
         "field_mapping": FIELD_MAPPING,
         "elapsed_seconds": elapsed,
     }
@@ -427,6 +521,10 @@ def prepare_dataset(
 
 
 def compute_episode_frames(dataset_root: Path, selected: list[int]) -> tuple[int, dict[int, int]]:
+    source_info = read_json(dataset_root / "meta" / "info.json")
+    if source_info.get("codebase_version") == "v3.0":
+        lengths = selected_v3_episode_lengths(dataset_root, selected)
+        return sum(lengths.values()), lengths
     episodes_by_idx, _ = selected_episode_metadata(dataset_root, selected)
     lengths = {idx: int(episodes_by_idx[idx]["length"]) for idx in selected}
     return sum(lengths.values()), lengths
@@ -471,6 +569,25 @@ def parse_wandb_url(line: str) -> str | None:
     if not match:
         return None
     return match.group(0).rstrip(").,")
+
+
+def scalar_metric(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        if hasattr(value, "detach"):
+            value = value.detach()
+        if hasattr(value, "float"):
+            value = value.float()
+        if hasattr(value, "mean"):
+            value = value.mean()
+        if hasattr(value, "cpu"):
+            value = value.cpu()
+        if hasattr(value, "item"):
+            return float(value.item())
+        return float(value)
+    except Exception:
+        return None
 
 
 def worker_config_to_train_cfg(config: dict[str, Any]):
@@ -558,18 +675,98 @@ def install_dataloader_audit_patch(config: dict[str, Any]):
     return torch, original_dataloader
 
 
+def install_action_component_audit_patch(config: dict[str, Any]):
+    from lerobot.policies.act.modeling_act import ACTPolicy
+
+    original_forward = ACTPolicy.forward
+    audit_path = Path(config["loss_components_path"]) if config.get("loss_components_path") else None
+    manifest_path = Path(config["manifest_path"]) if config.get("manifest_path") else None
+    log_freq = max(1, int(config.get("log_freq") or 1))
+    action_l1_source = "ACTPolicy.forward loss_dict['l1_loss']"
+    step_counter = {"value": 0}
+    audit_handle = None
+
+    if audit_path:
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_handle = audit_path.open("a", encoding="utf-8", buffering=1)
+
+    if manifest_path:
+        merge_manifest_fields(
+            manifest_path,
+            {
+                "loss_components_path": str(audit_path) if audit_path else None,
+                "action_l1_source": action_l1_source,
+            },
+        )
+
+    def record_action_l1(output_dict: dict[str, Any], loss_value: Any, forward_return_type: str) -> None:
+        step_counter["value"] += 1
+        raw_l1 = output_dict.get("l1_loss")
+        action_l1 = scalar_metric(raw_l1)
+        total_loss = scalar_metric(loss_value)
+        if total_loss is None:
+            total_loss = scalar_metric(output_dict.get("loss"))
+        if raw_l1 is not None:
+            output_dict.setdefault("action_l1", raw_l1)
+
+        row = {
+            "event": "action_component_metrics",
+            "captured_at": utc_now(),
+            "step": step_counter["value"],
+            "loss": total_loss,
+            "action_l1": action_l1,
+            "source": action_l1_source,
+            "forward_return_type": forward_return_type,
+        }
+        if audit_handle is not None:
+            audit_handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        if step_counter["value"] == 1 or step_counter["value"] % log_freq == 0:
+            print(f"action_component_metrics: {json.dumps(row, ensure_ascii=False, sort_keys=True)}", flush=True)
+
+    def patched_forward(self: Any, *args: Any, **kwargs: Any) -> Any:
+        output = original_forward(self, *args, **kwargs)
+        if isinstance(output, tuple) and len(output) == 2 and isinstance(output[1], dict):
+            loss, output_dict = output
+            record_action_l1(output_dict, loss, "tuple")
+            return output
+        if isinstance(output, dict):
+            record_action_l1(output, output.get("loss"), "dict")
+            return output
+        return output
+
+    ACTPolicy.forward = patched_forward
+
+    def restore() -> None:
+        ACTPolicy.forward = original_forward
+        if audit_handle is not None:
+            audit_handle.close()
+
+    return restore
+
+
 def run_worker(config_path: Path) -> int:
     runtime_env = apply_runtime_env()
-    print(f"starting LeRobot worker from {config_path}; runtime_env={json.dumps(runtime_env, sort_keys=True)}", flush=True)
+    config = read_json(config_path)
+    allow_disk_bypass = bool(config.get("allow_datasets_disk_check_bypass", False))
+    print(
+        "starting LeRobot worker from "
+        f"{config_path}; runtime_env={json.dumps(runtime_env, sort_keys=True)}; "
+        f"datasets_disk_check_bypass={allow_disk_bypass}",
+        flush=True,
+    )
 
     from lerobot.scripts.lerobot_train import train
 
-    config = read_json(config_path)
     train_cfg = worker_config_to_train_cfg(config)
     torch_module, original_dataloader = install_dataloader_audit_patch(config)
+    restore_action_audit = install_action_component_audit_patch(config)
     try:
-        train(train_cfg)
+        with datasets_disk_check_bypass(allow_disk_bypass) as bypassed:
+            if bypassed:
+                print("warning: HuggingFace Datasets disk-space precheck bypass enabled", flush=True)
+            train(train_cfg)
     finally:
+        restore_action_audit()
         torch_module.utils.data.DataLoader = original_dataloader
     return 0
 
@@ -644,6 +841,8 @@ def main() -> int:
         raise ValueError("--num-workers cannot be negative")
     if args.prefetch_factor <= 0:
         raise ValueError("--prefetch-factor must be positive")
+    if args.save_freq is not None and args.save_freq <= 0:
+        raise ValueError("--save-freq must be positive")
     if args.persistent_workers and args.num_workers <= 0:
         raise ValueError("--persistent-workers requires --num-workers > 0")
     if args.dry_run_batches < 0:
@@ -679,15 +878,17 @@ def main() -> int:
     else:
         planned_steps = steps_per_epoch * int(args.epochs)
         step_budget_source = "epochs"
-    save_freq = (
-        steps_per_epoch
-        if step_budget_source == "epochs" and args.save_every_epoch
-        else planned_steps
-    )
+    if args.save_freq is not None:
+        save_freq = min(int(args.save_freq), planned_steps)
+    elif step_budget_source == "epochs" and args.save_every_epoch:
+        save_freq = steps_per_epoch
+    else:
+        save_freq = planned_steps
     log_freq = min(max(1, args.log_freq), planned_steps)
 
     manifest_path = run_dir / "run_manifest.json"
     metrics_path = run_dir / "metrics.jsonl"
+    loss_components_path = run_dir / "loss_components.jsonl"
     dataloader_audit_path = run_dir / "dataloader_audit.jsonl"
     worker_config_path = run_dir / "actual_training_config.json"
     worker_config = {
@@ -711,11 +912,14 @@ def main() -> int:
         "dataloader_prefetch_factor": args.prefetch_factor,
         "dataloader_persistent_workers": args.persistent_workers,
         "dataloader_audit_path": str(dataloader_audit_path),
+        "loss_components_path": str(loss_components_path),
+        "action_l1_source": "ACTPolicy.forward loss_dict['l1_loss']",
         "manifest_path": str(manifest_path),
         "log_freq": log_freq,
         "save_freq": save_freq,
         "wandb_enabled": not args.disable_wandb,
         "wandb_project": args.wandb_project,
+        "allow_datasets_disk_check_bypass": args.allow_datasets_disk_check_bypass,
         "runtime_env": runtime_env,
     }
     write_json(worker_config_path, worker_config)
@@ -726,6 +930,7 @@ def main() -> int:
         "run_name": args.run_name,
         "dataset_root": str(dataset_root),
         "episodes_file": str(episodes_file),
+        "source_codebase_version": prepared_manifest.get("source_codebase_version"),
         "selected_episode_count": len(selected),
         "selected_frame_count": frame_count,
         "selected_episode_length_min": min(episode_lengths.values()),
@@ -733,6 +938,7 @@ def main() -> int:
         "batch_size": args.batch_size,
         "epochs": args.epochs,
         "requested_steps": args.steps,
+        "fixed_step_budget": planned_steps if step_budget_source == "steps" else None,
         "step_budget_source": step_budget_source,
         "steps_per_epoch": steps_per_epoch,
         "planned_steps": planned_steps,
@@ -741,13 +947,18 @@ def main() -> int:
         "dataloader_prefetch_factor": args.prefetch_factor,
         "dataloader_persistent_workers": args.persistent_workers,
         "dataloader_audit_path": str(dataloader_audit_path),
+        "loss_components_path": str(loss_components_path),
+        "action_l1_source": "ACTPolicy.forward loss_dict['l1_loss']",
+        "save_freq": save_freq,
         "prepared_dataset_manifest": prepared_manifest,
         "prepared_dataset_root": str(prepared_root),
+        "prepared_dataset_passthrough": bool(prepared_manifest.get("prepared_dataset_passthrough", False)),
         "train_output_dir": str(train_output_dir),
         "metrics_path": str(metrics_path),
         "actual_training_config": str(worker_config_path),
         "field_mapping": FIELD_MAPPING,
         "runtime_env": runtime_env,
+        "datasets_disk_check_bypass_requested": args.allow_datasets_disk_check_bypass,
     }
     write_json(manifest_path, manifest)
 

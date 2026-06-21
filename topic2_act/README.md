@@ -30,6 +30,45 @@ Important interpretation notes:
 - Do not add compatibility wrappers for retired paths. For reproducible server
   commands, create a stable `last` symlink to the latest checkpoint directory.
 
+### Week 3 Day 2 Recovery Note
+
+During the Week 3 Day 2 disk recovery, the heavy server copy of the original
+`topic2_act/data/xiaoma26_calvin_lerobot/splitA/` source directory was removed.
+The reproducible source remains the official mirror of
+`xiaoma26/calvin-lerobot`; to regenerate the raw A split, rerun
+`prepare_xiaoma_calvin_split.py --download-split splitA` with
+`HF_ENDPOINT=https://hf-mirror.com`.
+
+Current A-only full training uses the validated canonical v3 view:
+
+```text
+topic2_act/data/xiaoma26_calvin_lerobot/splitA_episodes_A_full_canonical_v3
+```
+
+Expected counts:
+
+| Artifact | Expected check |
+| --- | --- |
+| `episodes_A_full.json` | 6089 episode indices |
+| `splitA_episodes_A_full_canonical_v3/meta/info.json` | `codebase_version=v3.0`, `total_episodes=6089`, `total_frames=366693` |
+| `abc_joint_canonical_v3/abc_schema_repair_summary.json` | `total_rows=1071743`, `schema_matches_info_features=true` |
+
+Record SHA256 evidence after the recovery3 repair:
+
+```bash
+cd /root/Test/Zhr/DL/HW3
+sha256sum \
+  topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_A_full.json \
+  topic2_act/data/xiaoma26_calvin_lerobot/splitA_episodes_A_full_canonical_v3/meta/info.json \
+  topic2_act/data/xiaoma26_calvin_lerobot/abc_joint_canonical_v3/abc_schema_repair_summary.json \
+  2>&1 | tee logs/Week3_Day2/day2_recovery3_repro_sha256.log
+```
+
+Keep `abc_remap_manifest.jsonl` with the repaired ABC dataset. It is the
+provenance record for `source_split`, `source_scene`, source task indices, and
+canonical task indices after the training parquet files are trimmed to match
+LeRobot v3 features.
+
 ### Day 7 Stable Checkpoint Pointer
 
 Run this on the Linux GPU server after syncing the repository and model outputs:

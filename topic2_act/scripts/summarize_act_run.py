@@ -54,6 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pid-file", default=None)
     parser.add_argument("--min-epochs", type=float, default=0.0)
     parser.add_argument("--require-healthy-loss", action="store_true")
+    parser.add_argument("--require-action-l1", action="store_true")
     parser.add_argument("--require-checkpoint", action="store_true")
     parser.add_argument("--require-wandb", action="store_true")
     parser.add_argument("--loss-window", type=int, default=20)
@@ -183,6 +184,29 @@ def collect_metrics(run_dir: Path, log_text: str) -> list[dict[str, Any]]:
     return metrics
 
 
+def parse_action_component_line(line: str) -> dict[str, Any] | None:
+    clean = strip_ansi(line)
+    prefix = "action_component_metrics:"
+    if prefix not in clean:
+        return None
+    raw_payload = clean.split(prefix, 1)[1].strip()
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return {"raw": clean, "parse_error": True}
+    return payload if isinstance(payload, dict) else {"raw": clean, "parse_error": True}
+
+
+def collect_action_components(run_dir: Path, log_text: str) -> list[dict[str, Any]]:
+    rows = read_jsonl(run_dir / "loss_components.jsonl")
+    parsed_from_log = [
+        row for row in (parse_action_component_line(line) for line in log_text.splitlines()) if row
+    ]
+    if parsed_from_log and len(parsed_from_log) >= len(rows):
+        return parsed_from_log
+    return rows
+
+
 def finite_losses(metrics: list[dict[str, Any]]) -> list[float]:
     losses: list[float] = []
     for row in metrics:
@@ -190,6 +214,15 @@ def finite_losses(metrics: list[dict[str, Any]]) -> list[float]:
         if isinstance(value, (int, float)):
             losses.append(float(value))
     return losses
+
+
+def finite_action_l1(rows: list[dict[str, Any]]) -> list[float]:
+    values: list[float] = []
+    for row in rows:
+        value = row.get("action_l1")
+        if isinstance(value, (int, float)):
+            values.append(float(value))
+    return values
 
 
 def max_epoch(metrics: list[dict[str, Any]], manifest: dict[str, Any]) -> float:
@@ -286,6 +319,21 @@ def loss_health(losses: list[float], *, window: int) -> tuple[bool, str]:
     return True, f"loss healthy: first_avg={first_avg:.6g}, last_avg={last_avg:.6g}, min={min(losses):.6g}"
 
 
+def action_l1_health(rows: list[dict[str, Any]], values: list[float]) -> tuple[bool, str]:
+    parse_errors = sum(1 for row in rows if row.get("parse_error"))
+    if parse_errors:
+        return False, f"action_l1 parse errors={parse_errors}"
+    if not rows:
+        return False, "loss_components.jsonl/action_component_metrics rows are missing"
+    if not values:
+        return False, f"no finite action_l1 values found in {len(rows)} rows"
+    if len(values) != len(rows):
+        return False, f"finite action_l1 values {len(values)} != rows {len(rows)}"
+    if any(not math.isfinite(value) for value in values):
+        return False, "action_l1 contains NaN or Inf"
+    return True, f"action_l1_count={len(values)}, first={values[0]:.6g}, last={values[-1]:.6g}, min={min(values):.6g}"
+
+
 def main() -> int:
     args = parse_args()
     run_dir = Path(args.run_dir)
@@ -299,7 +347,9 @@ def main() -> int:
             log_text = log_path.read_text(encoding="utf-8", errors="replace")
 
     metrics = collect_metrics(run_dir, log_text)
+    action_component_rows = collect_action_components(run_dir, log_text)
     losses = finite_losses(metrics)
+    action_l1_values = finite_action_l1(action_component_rows)
     data_s_values = metric_values(metrics, "data_s")
     updt_s_values = metric_values(metrics, "updt_s")
     metric_total_s_values = metric_pair_sums(metrics, "data_s", "updt_s")
@@ -342,6 +392,13 @@ def main() -> int:
         ok, detail = loss_health(losses, window=args.loss_window)
         checks.append(CheckResult("healthy_loss", ok, detail))
 
+    if args.require_action_l1:
+        ok, detail = action_l1_health(action_component_rows, action_l1_values)
+        checks.append(CheckResult("action_l1", ok, detail))
+    else:
+        ok, detail = action_l1_health(action_component_rows, action_l1_values)
+        checks.append(CheckResult("action_l1", ok, detail, required=False))
+
     checks.append(CheckResult("pid_status", True, pid_detail, required=False))
 
     required_failures = [check for check in checks if check.required and not check.ok]
@@ -367,6 +424,16 @@ def main() -> int:
         "loss_last": losses[-1] if losses else None,
         "loss_min": min(losses) if losses else None,
         "loss_max": max(losses) if losses else None,
+        "action_l1": summarize_values(action_l1_values, window=args.io_window),
+        "action_l1_count": len(action_l1_values),
+        "action_l1_first": action_l1_values[0] if action_l1_values else None,
+        "action_l1_last": action_l1_values[-1] if action_l1_values else None,
+        "action_l1_min": min(action_l1_values) if action_l1_values else None,
+        "action_l1_recent_mean": (
+            average(action_l1_values[-max(1, min(args.io_window, len(action_l1_values))) :])
+            if action_l1_values
+            else None
+        ),
         "wall_clock_seconds_per_step": wall_clock_seconds_per_step,
         "data_s": summarize_values(data_s_values, window=args.io_window),
         "updt_s": summarize_values(updt_s_values, window=args.io_window),

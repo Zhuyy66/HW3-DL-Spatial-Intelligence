@@ -459,6 +459,15 @@ def parquet_probe(local_dir: Path, split: str) -> dict[str, Any]:
     return {"available": True, "path": str(parquet), "rows": len(frame), "columns": columns}
 
 
+def split_scene_label(split: str) -> str:
+    expected = OFFICIAL_EXPECTED.get(split)
+    if expected:
+        return str(expected["scene"])
+    if split.lower().startswith("split") and len(split) > len("split"):
+        return split[len("split") :].upper()
+    return split.upper()
+
+
 def write_episode_views(local_dir: Path, output_dir: Path, split: str, smoke_count: int, seed: int) -> dict[str, Any]:
     episodes = read_jsonl(local_dir / split / "meta" / "episodes.jsonl")
     episode_indices = sorted(int(row["episode_index"]) for row in episodes)
@@ -472,17 +481,34 @@ def write_episode_views(local_dir: Path, output_dir: Path, split: str, smoke_cou
     smoke = sorted(shuffled[:smoke_count])
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    full_path = output_dir / "episodes_A_full.json"
-    smoke_path = output_dir / f"episodes_A_smoke{smoke_count}.json"
+    scene = split_scene_label(split)
+    full_path = output_dir / f"episodes_{scene}_full.json"
+    smoke_path = output_dir / f"episodes_{scene}_smoke{smoke_count}.json"
     write_json_atomic(full_path, episode_indices)
     write_json_atomic(smoke_path, smoke)
-    return {
-        "episodes_A_full": str(full_path),
-        "episodes_A_full_count": len(episode_indices),
-        "episodes_A_smoke": str(smoke_path),
-        "episodes_A_smoke_count": len(smoke),
+    result = {
+        "split": split,
+        "scene": scene,
+        "episodes_full": str(full_path),
+        "episodes_full_count": len(episode_indices),
+        "episodes_smoke": str(smoke_path),
+        "episodes_smoke_count": len(smoke),
+        f"episodes_{scene}_full": str(full_path),
+        f"episodes_{scene}_full_count": len(episode_indices),
+        f"episodes_{scene}_smoke": str(smoke_path),
+        f"episodes_{scene}_smoke_count": len(smoke),
         "seed": seed,
     }
+    if scene == "A":
+        result.update(
+            {
+                "episodes_A_full": str(full_path),
+                "episodes_A_full_count": len(episode_indices),
+                "episodes_A_smoke": str(smoke_path),
+                "episodes_A_smoke_count": len(smoke),
+            }
+        )
+    return result
 
 
 def copy_manifest_to_output(manifest_path: Path, output_dir: Path) -> Path:
@@ -643,8 +669,11 @@ def main() -> int:
         return 1
 
     print("ok: official CALVIN split preparation completed")
-    print(f"episodes_A_full_count: {episode_outputs['episodes_A_full_count']}")
-    print(f"episodes_A_smoke_count: {episode_outputs['episodes_A_smoke_count']}")
+    scene = str(episode_outputs["scene"])
+    print(f"episodes_full_count: {episode_outputs['episodes_full_count']}")
+    print(f"episodes_smoke_count: {episode_outputs['episodes_smoke_count']}")
+    print(f"episodes_{scene}_full_count: {episode_outputs[f'episodes_{scene}_full_count']}")
+    print(f"episodes_{scene}_smoke_count: {episode_outputs[f'episodes_{scene}_smoke_count']}")
     print(f"summary: {summary_path}")
     print(f"manifest: {manifest_path}")
     return 0
