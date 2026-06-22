@@ -9,6 +9,7 @@
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{graphicx}
+\graphicspath{{reports/figures/}{figures/}}
 \usepackage{hyperref}
 \usepackage[numbers]{natbib}
 
@@ -122,11 +123,54 @@ LeRobot py3.12 worker
 
 \subsection{Topic 1: 3D Reconstruction, Generation, and Fusion}
 
-TODO：列出 Topic 1 需要补齐的实验表格和图。至少包含 object\_A 3DGS 训练结果、counter 背景 3DGS 结果、threestudio smoke mesh、Blender 融合验证图、最终多视角视频截图。Week 1 已记录的 PSNR、截图和视频需要从飞书或服务器产物中整理到 \texttt{reports/figures/}。
+Topic 1 的正式 Experiments 图表仍等待成员 A 的最终资产归档。本节后续将补入 object\_A 3DGS 训练结果、counter 背景 3DGS 结果、text-to-3D hamburger mesh、Stable Zero123 object\_C mesh、Blender 融合验证图和最终多视角视频截图。当前 Day 5 版本只保留该占位，避免把尚未进入 \texttt{reports/figures/} 的飞书截图或服务器大文件写成报告证据。
 
 \subsection{Topic 2: ACT Training and CALVIN Rollout}
 
-TODO：列出 Topic 2 实验。Week 1 结果包括 A-only smoke500 50 epoch engineering baseline、loss 曲线、WandB run、checkpoint 数、bridge fidelity exact match、direct-cameras rollout smoke。正式结果还需要补 final A-only 与 ABC comparable-budget 训练、环境 D zero-shot 指标、失败案例和 EGL/fallback 评测说明。
+Topic 2 的正式比较使用相同 ACT 结构和相同 150000 gradient steps。A-only 使用 splitA 训练，ABC 使用 splitA+splitB+splitC 训练；两者共享 batch size 8、learning rate $10^{-5}$、weight decay $10^{-4}$、\texttt{chunk\_size=100}、\texttt{n\_action\_steps=100}、16 个 dataloader workers、\texttt{prefetch\_factor=4} 和 persistent workers。训练过程中的 action L1 曲线见图~\ref{fig:topic2-train-action-l1}。A-only 最终训练 action L1 为 0.0813，ABC 最终训练 action L1 为 0.1567；该数值来自各自训练日志中的 \texttt{loss\_components.jsonl}，只用于说明训练收敛状态，最终泛化结论以 splitD 离线评测为准。
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\linewidth]{topic2_train_action_l1_curve.png}
+  \caption{Training action L1 curves for the comparable-budget A-only and ABC ACT runs.}
+  \label{fig:topic2-train-action-l1}
+\end{figure}
+
+环境 D zero-shot 主指标采用 open-loop Action L1。评测脚本直接读取官方 splitD raw parquet，覆盖 5124 条 episode 和 308918 帧，构造与 ACT 训练一致的 100 步 future action chunk，并在有效动作元素上计算平均 L1。表~\ref{tab:topic2-d-l1} 给出完整比较。normalized action space 是主比较口径；raw action units 作为可解释性补充。ABC 在两个口径下都低于 A-only：normalized L1 从 0.6586 降到 0.5780，raw L1 从 0.1934 降到 0.1687。
+
+\begin{table}[h]
+  \centering
+  \caption{A-only vs ABC on environment D open-loop Action L1. Lower is better.}
+  \label{tab:topic2-d-l1}
+  \resizebox{\linewidth}{!}{%
+    \begin{tabular}{llrrlll}
+      \toprule
+      Model & Training data & Steps & D normalized Action L1 & D raw Action L1 & Formal success rate & Source result \\
+      \midrule
+      A-only & splitA & 150000 & 0.658629 & 0.193360 & Not run; see smoke evidence & \texttt{a\_only\_splitD\_action\_l1.json} \\
+      ABC & splitA+splitB+splitC & 150000 & 0.577993 & 0.168696 & Not run; see smoke evidence & \texttt{abc\_splitD\_action\_l1.json} \\
+      \bottomrule
+    \end{tabular}%
+  }
+\end{table}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\linewidth]{topic2_splitD_action_l1_bar.png}
+  \caption{Environment D open-loop Action L1 comparison in normalized and raw action spaces.}
+  \label{fig:topic2-splitd-bar}
+\end{figure}
+
+图~\ref{fig:topic2-per-chunk} 展示了 chunk 内不同 future-action offset 的误差变化。两个模型在后段 offset 上误差更高，这符合更远未来动作更难从当前观测预测的直觉。ABC 在所有有效 offset 上都低于 A-only，说明额外的 B/C 视觉布局在本次离线动作预测指标上提高了环境 D 视觉偏移下的鲁棒性。
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.82\linewidth]{topic2_splitD_per_chunk_l1.png}
+  \caption{splitD normalized Action L1 by ACT chunk offset.}
+  \label{fig:topic2-per-chunk}
+\end{figure}
+
+表~\ref{tab:topic2-d-l1} 未填入正式 closed-loop success rate。Day 4 系统包检查后，strict NVIDIA EGL 仍受服务器图形栈限制，因此稳定主指标采用全量 splitD open-loop Action L1。为保留 closed-loop 路线的可审计证据，两组 checkpoint 也运行了已经验证过的 \texttt{direct-cameras} smoke。A-only smoke 完成 60 steps，记录 \texttt{moved=true}、\texttt{max\_tcp\_delta=0.264235} 和 \texttt{last\_action\_shape=[7]}；ABC smoke 完成 60 steps，记录 \texttt{moved=true}、\texttt{max\_tcp\_delta=0.135650} 和 \texttt{last\_action\_shape=[7]}。结构化证据位于 \path{topic2_act/eval/results/}，文件名为 \path{a_only_direct_cameras_smoke.json} 和 \path{abc_direct_cameras_smoke.json}；原始日志位于 \path{logs/Week3_Day4/} 与 \path{logs/Week3_Day5/}。
 
 \section{Discussion}
 
