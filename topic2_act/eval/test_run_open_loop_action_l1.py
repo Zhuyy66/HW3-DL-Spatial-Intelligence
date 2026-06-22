@@ -47,6 +47,9 @@ class L1AccumulatorTest(unittest.TestCase):
         self.assertEqual(summary["per_dim_l1"], [8 / 3, 14 / 3])
         self.assertEqual(summary["per_chunk_counts"], [4, 2, 0])
         self.assertEqual(summary["per_chunk_l1"][2], None)
+        self.assertEqual(summary["frame_l1_distribution"]["count"], 2)
+        self.assertAlmostEqual(summary["frame_l1_distribution"]["mean"], ((1 + 3 + 5 + 7) / 4 + (2 + 4) / 2) / 2)
+        self.assertEqual(len(summary["frame_l1_distribution"]["histogram_counts"]), 40)
 
     def test_raw_metrics_are_optional(self) -> None:
         accumulator = L1Accumulator(chunk_size=1, action_dim=2)
@@ -59,6 +62,8 @@ class L1AccumulatorTest(unittest.TestCase):
 
         self.assertAlmostEqual(summary["raw_action_l1_valid_mean"], 15.0)
         self.assertEqual(summary["raw_per_dim_l1"], [10.0, 20.0])
+        self.assertEqual(summary["raw_frame_l1_distribution"]["count"], 1)
+        self.assertAlmostEqual(summary["raw_frame_l1_distribution"]["p50"], 15.0)
 
 
 if __name__ == "__main__":

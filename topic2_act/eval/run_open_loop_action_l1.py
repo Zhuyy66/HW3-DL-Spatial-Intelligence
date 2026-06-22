@@ -57,6 +57,8 @@ class L1Accumulator:
         self.raw_per_dim_count = np.zeros(self.action_dim, dtype=np.int64)
         self.raw_per_chunk_sum = np.zeros(self.chunk_size, dtype=np.float64)
         self.raw_per_chunk_count = np.zeros(self.chunk_size, dtype=np.int64)
+        self.frame_l1_values: list[float] = []
+        self.raw_frame_l1_values: list[float] = []
 
     def update(
         self,
@@ -90,6 +92,7 @@ class L1Accumulator:
         self.per_dim_count += expanded_valid.sum(axis=(0, 1)).astype(np.int64)
         self.per_chunk_sum += valid_err.sum(axis=(0, 2))
         self.per_chunk_count += expanded_valid.sum(axis=(0, 2)).astype(np.int64)
+        self.frame_l1_values.extend(self._frame_means(valid_err, expanded_valid))
 
         if raw_abs_error is None:
             return
@@ -103,6 +106,7 @@ class L1Accumulator:
         self.raw_per_dim_count += expanded_valid.sum(axis=(0, 1)).astype(np.int64)
         self.raw_per_chunk_sum += raw_valid_err.sum(axis=(0, 2))
         self.raw_per_chunk_count += expanded_valid.sum(axis=(0, 2)).astype(np.int64)
+        self.raw_frame_l1_values.extend(self._frame_means(raw_valid_err, expanded_valid))
 
     @staticmethod
     def _means(sums: np.ndarray, counts: np.ndarray) -> list[float | None]:
@@ -110,6 +114,51 @@ class L1Accumulator:
         for total, count in zip(sums.tolist(), counts.tolist(), strict=True):
             values.append(float(total / count) if count else None)
         return values
+
+    @staticmethod
+    def _frame_means(valid_err: np.ndarray, expanded_valid: np.ndarray) -> list[float]:
+        totals = valid_err.sum(axis=(1, 2))
+        counts = expanded_valid.sum(axis=(1, 2))
+        values: list[float] = []
+        for total, count in zip(totals.tolist(), counts.tolist(), strict=True):
+            if count:
+                values.append(float(total / count))
+        return values
+
+    @staticmethod
+    def _distribution(values: list[float], bins: int = 40) -> dict[str, Any]:
+        if not values:
+            return {
+                "count": 0,
+                "mean": None,
+                "std": None,
+                "min": None,
+                "p05": None,
+                "p25": None,
+                "p50": None,
+                "p75": None,
+                "p95": None,
+                "max": None,
+                "histogram_bin_edges": [],
+                "histogram_counts": [],
+            }
+        arr = np.asarray(values, dtype=np.float64)
+        hist_counts, hist_edges = np.histogram(arr, bins=bins)
+        quantiles = np.quantile(arr, [0.05, 0.25, 0.50, 0.75, 0.95])
+        return {
+            "count": int(arr.size),
+            "mean": float(arr.mean()),
+            "std": float(arr.std(ddof=0)),
+            "min": float(arr.min()),
+            "p05": float(quantiles[0]),
+            "p25": float(quantiles[1]),
+            "p50": float(quantiles[2]),
+            "p75": float(quantiles[3]),
+            "p95": float(quantiles[4]),
+            "max": float(arr.max()),
+            "histogram_bin_edges": [float(value) for value in hist_edges.tolist()],
+            "histogram_counts": [int(value) for value in hist_counts.tolist()],
+        }
 
     def summary(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -121,6 +170,7 @@ class L1Accumulator:
             "per_dim_counts": self.per_dim_count.tolist(),
             "per_chunk_l1": self._means(self.per_chunk_sum, self.per_chunk_count),
             "per_chunk_counts": self.per_chunk_count.tolist(),
+            "frame_l1_distribution": self._distribution(self.frame_l1_values),
             "metric_space": "normalized_action",
         }
         if self.raw_valid_count:
@@ -131,6 +181,7 @@ class L1Accumulator:
                     "raw_per_dim_counts": self.raw_per_dim_count.tolist(),
                     "raw_per_chunk_l1": self._means(self.raw_per_chunk_sum, self.raw_per_chunk_count),
                     "raw_per_chunk_counts": self.raw_per_chunk_count.tolist(),
+                    "raw_frame_l1_distribution": self._distribution(self.raw_frame_l1_values),
                     "raw_metric_space": "dataset_action_units",
                 }
             )

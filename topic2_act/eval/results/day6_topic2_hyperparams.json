@@ -1,0 +1,185 @@
+{
+  "rows": [
+    {
+      "group": "model",
+      "parameter": "policy",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "act"
+    },
+    {
+      "group": "model",
+      "parameter": "vision_backbone",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "resnet18"
+    },
+    {
+      "group": "model",
+      "parameter": "pretrained_backbone_weights",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "ResNet18_Weights.IMAGENET1K_V1"
+    },
+    {
+      "group": "model",
+      "parameter": "dim_model",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "512"
+    },
+    {
+      "group": "model",
+      "parameter": "n_heads",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "8"
+    },
+    {
+      "group": "model",
+      "parameter": "n_encoder_layers",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "4"
+    },
+    {
+      "group": "model",
+      "parameter": "n_decoder_layers",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "1"
+    },
+    {
+      "group": "model",
+      "parameter": "dim_feedforward",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "3200"
+    },
+    {
+      "group": "model",
+      "parameter": "use_vae",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "True"
+    },
+    {
+      "group": "model",
+      "parameter": "latent_dim",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "32"
+    },
+    {
+      "group": "model",
+      "parameter": "dropout",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "0.1"
+    },
+    {
+      "group": "model",
+      "parameter": "kl_weight",
+      "source": "act_default_v0.4.0.dump.txt",
+      "value": "10.0"
+    },
+    {
+      "group": "data",
+      "parameter": "A-only episodes/frames",
+      "source": "a_only run_manifest.json",
+      "value": "6089 / 366693"
+    },
+    {
+      "group": "data",
+      "parameter": "ABC episodes/frames",
+      "source": "abc run_manifest.json",
+      "value": "17870 / 1071743"
+    },
+    {
+      "group": "data",
+      "parameter": "state/action shape",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "[15] / [7]"
+    },
+    {
+      "group": "data",
+      "parameter": "static/wrist image shape",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "[200, 200, 3] / [84, 84, 3]"
+    },
+    {
+      "group": "training",
+      "parameter": "optimizer",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "adamw"
+    },
+    {
+      "group": "training",
+      "parameter": "learning_rate",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "1e-05"
+    },
+    {
+      "group": "training",
+      "parameter": "weight_decay",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "0.0001"
+    },
+    {
+      "group": "training",
+      "parameter": "batch_size",
+      "source": "run_manifest.json",
+      "value": "8"
+    },
+    {
+      "group": "training",
+      "parameter": "gradient_steps",
+      "source": "run_manifest.json",
+      "value": "150000"
+    },
+    {
+      "group": "training",
+      "parameter": "seed",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "20260529"
+    },
+    {
+      "group": "training",
+      "parameter": "chunk_size",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "100"
+    },
+    {
+      "group": "training",
+      "parameter": "n_action_steps",
+      "source": "act_calvin_week3_150k.yaml",
+      "value": "100"
+    },
+    {
+      "group": "training",
+      "parameter": "num_workers",
+      "source": "run_manifest.json",
+      "value": "16"
+    },
+    {
+      "group": "training",
+      "parameter": "prefetch_factor",
+      "source": "run_manifest.json",
+      "value": "4"
+    },
+    {
+      "group": "training",
+      "parameter": "persistent_workers",
+      "source": "run_manifest.json",
+      "value": "True"
+    },
+    {
+      "group": "training",
+      "parameter": "save_freq",
+      "source": "run_manifest.json",
+      "value": "50000"
+    },
+    {
+      "group": "logging",
+      "parameter": "A-only WandB",
+      "source": "a_only run_manifest.json",
+      "value": "https://wandb.ai/ares-core-ai/hw3-topic2/runs/cnfwf30s"
+    },
+    {
+      "group": "logging",
+      "parameter": "ABC WandB",
+      "source": "abc run_manifest.json",
+      "value": "https://wandb.ai/ares-core-ai/hw3-topic2/runs/eysfzlqn"
+    }
+  ],
+  "status": "completed"
+}
