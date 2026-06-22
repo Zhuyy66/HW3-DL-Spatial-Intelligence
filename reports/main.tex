@@ -96,7 +96,27 @@ ABC 联合训练使用单个 LeRobot v3 canonical dataset。由于 splitA、spli
 
 \subsection{Topic 2: ACT/CALVIN Cross-Environment Generalization}
 
-TODO：描述 Topic 2 的数据、训练和评测链路。数据部分写官方 \texttt{xiaoma26/calvin-lerobot} splitA/B/C/D，说明旧 \texttt{scene\_info.npy} 反推路线作为交叉验证证据。训练部分写 \texttt{run\_act\_train.py} 将 \texttt{state/actions/image/wrist\_image} 转为 LeRobot canonical keys，再训练 ACT。评测部分写 \texttt{LeRobotACTWrapper} 在 CALVIN Python 3.8 环境中调用 Python 3.12 worker 完成真实 ACT 推理。
+题目二采用 Action Chunking Transformer (ACT) 作为模仿学习策略。ACT 以当前视觉观测和机器人状态为输入，通过 Transformer encoder-decoder 预测一段未来动作序列。项目配置使用 \texttt{chunk\_size=100} 与 \texttt{n\_action\_steps=100}，动作维度为 7，前 6 维是相对末端位姿增量，最后一维是夹爪命令。训练时模型对完整动作块计算 L1 损失，并用 \texttt{action\_is\_pad} 屏蔽 episode 末尾越界的 future action。这个动作分块设计降低了策略查询频率，也让后续分析可以按 chunk 内时间位置统计误差，观察跨环境视觉分布偏移对短期和长期动作预测的影响。
+
+训练入口由 \texttt{topic2\_act/scripts/run\_act\_train.py} 封装。官方 \texttt{xiaoma26/calvin-lerobot} 数据以 v2.1 schema 发布，原始字段为 \texttt{state}、\texttt{actions}、\texttt{image} 和 \texttt{wrist\_image}；LeRobot ACT 训练需要 canonical key，因此脚本将字段重命名为 \texttt{observation.state}、\texttt{action}、\texttt{observation.images.image} 和 \texttt{observation.images.wrist\_image}，再转换到 LeRobot v3 数据布局。A-only 模型只使用环境 A，ABC 模型使用环境 A/B/C 的合并 canonical dataset。两组正式训练共享网络结构、batch size、学习率、weight decay、随机种子、DataLoader 配置和 150000 gradient steps，只改变训练数据范围，从而保证环境覆盖差异是主要对比变量。
+
+评测使用两层指标。主指标是 splitD 离线 open-loop Action L1：评测脚本直接读取环境 D 的 raw parquet，按 ACT 配置构造 100 步 future action chunk，加载 checkpoint 保存的 preprocessor 和 policy，在 normalized action 空间计算有效动作元素上的平均 L1，并额外保存按动作维度、chunk 位置和原始动作单位反归一化后的误差统计。该指标不依赖仿真图形栈，能够稳定给出 A-only 和 ABC 在未见环境 D 上的 zero-shot 动作预测误差。辅指标是 CALVIN closed-loop rollout success rate 或 smoke success；它依赖 PyBullet/CALVIN 渲染路径，因此只在 EGL 或 fallback 路线可运行时记录。
+
+CALVIN 官方评测环境固定在 Python 3.8，而 LeRobot 0.4.0、ACT checkpoint 和训练侧依赖运行在 Python 3.12。为避免在 CALVIN 环境中复刻训练栈，项目采用双环境桥接架构：Python 3.8 的 \texttt{LeRobotACTWrapper} 只保留 CALVIN 的 \texttt{reset()} 和 \texttt{step(obs, goal)} 接口，真实图像缩放、状态整理、normalization、ACT 推理和 action chunk 队列都由 Python 3.12 worker 完成。每次 CALVIN 子任务开始时 wrapper 调用 worker reset，清空 action 队列，保证不同 rollout 之间没有历史动作残留。
+
+\begin{verbatim}
+CALVIN py3.8 env
+  reset()/step(obs, goal)
+        |
+        |  4-byte length + pickle protocol 4 frame
+        v
+LeRobot py3.12 worker
+  raw CALVIN obs -> canonical ACT batch
+  checkpoint preprocessor -> ACTPolicy.select_action
+  list[float] action[7] -> CALVIN env.step(action)
+\end{verbatim}
+
+桥接协议只在 stdin/stdout 上传输带长度前缀的 pickle frame，worker 日志写入 stderr 或独立日志文件。worker 返回的动作 payload 使用纯 Python \texttt{list[float]}，CALVIN 侧再转换为 \texttt{np.float32[7]}，这样可以避开 Python 3.12/NumPy 2 到 Python 3.8/NumPy 1 之间的 ndarray pickle 兼容问题。EGL 路线按 Day 4 决策一次性处理：优先尝试 strict NVIDIA EGL；若仍受系统 GLVND/NVIDIA userspace 限制，则采用 Day 6 已验证的 \texttt{direct-cameras} 路线作为 closed-loop 辅助证据，并在报告中明确该 fallback 的使用范围。Day 4 实测中，系统包修复后 strict EGL 仍停留在 Mesa llvmpipe，因此后续 closed-loop smoke 采用 \texttt{direct-cameras}，主结论以 splitD open-loop Action L1 为准。
 
 \section{Experiments}
 
