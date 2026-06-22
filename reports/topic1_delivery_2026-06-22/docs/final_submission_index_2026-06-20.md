@@ -4,7 +4,8 @@ Latest delivery folder:
 
 - `/root/HW3/reports/topic1_delivery_2026-06-22/`
 - Object C mesh zip: `/root/HW3/reports/topic1_delivery_2026-06-22/object_C_mesh/objectC_stable_zero123_it3000_mesh.zip`
-- Final fusion video placeholder: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`
+- Final fusion video: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
+- Final fusion keyframes: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/keyframes/`
 
 ## Git-tracked items
 
@@ -46,7 +47,7 @@ Latest delivery folder:
 - Delivery folder: `/root/HW3/reports/topic1_delivery_2026-06-22/`
 - Figures: `/root/HW3/reports/topic1_delivery_2026-06-22/figures/`
 - Existing validation videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/`
-- Final fusion video: pending user export.
+- Final fusion video: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
 
 ## Key scripts
 

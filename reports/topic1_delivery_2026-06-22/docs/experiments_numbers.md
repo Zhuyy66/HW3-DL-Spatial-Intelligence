@@ -32,9 +32,23 @@
 
 ## Fusion Video
 
-Status: pending user export.
+Status: complete.
 
-Expected final path after copy:
+Final path:
 
 `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
 
+Video metadata:
+
+- 300 frames
+- 30 fps
+- 10 seconds
+- resolution: 3114 x 2076
+
+Keyframes:
+
+- `place_final_fusion_video_here/keyframes/fusion_frame_0000.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0075.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0150.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0225.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0299.png`

@@ -236,6 +236,47 @@ DreamFusion 路线首先用 100 step 完成 smoke test，确认 SDS 优化与视
   \caption{Blender 中导入 \texttt{counter} 环绕相机轨迹后的验证画面。}
 \end{figure}
 
+\subsection{最终融合视频结果}
+
+在完成背景、物体 A、物体 B 和物体 C 的资产准备后，我们将它们统一导入 Blender，并使用同一条 \texttt{counter} orbit 相机轨迹进行 300 帧漫游渲染。最终视频为 10 秒、30 fps、共 300 帧，路径为：
+\texttt{/root/HW3/reports/topic1\_delivery\_2026-06-22/place\_final\_fusion\_video\_here/topic1\_final\_fusion\_counter\_ABC.mp4}。
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/fusion_frame_0000.png}
+    \caption{frame 0000}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/fusion_frame_0075.png}
+    \caption{frame 0075}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/fusion_frame_0150.png}
+    \caption{frame 0150}
+  \end{subfigure}
+
+  \vspace{0.5em}
+
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/fusion_frame_0225.png}
+    \caption{frame 0225}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.32\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/fusion_frame_0299.png}
+    \caption{frame 0299}
+  \end{subfigure}
+  \caption{最终融合视频的关键帧。该结果展示了 \texttt{counter} 背景、真实重建物体 A、DreamFusion 汉堡和 Stable Zero123 物体 C 在同一场景与同一相机轨迹下的空间对齐。}
+\end{figure}
+
 \subsection{三种资产生成方式对比}
 
 \begin{table}[H]

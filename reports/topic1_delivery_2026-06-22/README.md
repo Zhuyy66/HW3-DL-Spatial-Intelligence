@@ -35,15 +35,15 @@ The 3000-iteration Stable Zero123 run is selected as the final object C mesh ver
 
 The 10000-iteration run is retained as a longer-training comparison. It has validation/test videos and checkpoint logs, but no exported mesh package was found in the current output directory. In the report, it is best described as evidence that longer SDS optimization does not necessarily improve visible quality for this input.
 
-## Current Missing Item
+## Final Fusion Video
 
-The final fused counter-scene render is not included yet. After exporting it from Blender, place the mp4 in:
+The final fused counter-scene render has been added:
 
-`place_final_fusion_video_here/`
+- `place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0000.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0075.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0150.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0225.png`
+- `place_final_fusion_video_here/keyframes/fusion_frame_0299.png`
 
-Recommended filename:
-
-`topic1_final_fusion_counter_ABC.mp4`
-
-Then extract or provide 3-5 keyframes showing counter background, object A, hamburger, and object C in the same scene.
-
+The video has 300 frames at 30 fps and lasts 10 seconds.

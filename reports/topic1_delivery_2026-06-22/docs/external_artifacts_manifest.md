@@ -54,7 +54,7 @@ Large files are intentionally kept outside Git. This manifest records the server
 
 ## Final Fusion Video
 
-Pending. Put final mp4 and keyframes under:
+Final mp4 and keyframes:
 
-`/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`
-
+- `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
+- `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/keyframes/`

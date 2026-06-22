@@ -43,6 +43,8 @@ It contains:
 - Object C Stable Zero123 3000-iteration mesh package: `/root/HW3/reports/topic1_delivery_2026-06-22/object_C_mesh/objectC_stable_zero123_it3000_mesh.zip`
 - Object C validation videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it3000-val.mp4`, `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it3000-test.mp4`
 - Object C 10000-iteration comparison videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it10000-val.mp4`, `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it10000-test.mp4`
+- Final fusion video: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
+- Final fusion keyframes: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/keyframes/`
 - Report-ready figures: `/root/HW3/reports/topic1_delivery_2026-06-22/figures/`
 - Report snippets and artifact manifest: `/root/HW3/reports/topic1_delivery_2026-06-22/docs/`
 - Reproducibility helper scripts: `/root/HW3/reports/topic1_delivery_2026-06-22/scripts/`
@@ -56,8 +58,8 @@ Object C version choice:
 
 Final fusion video status:
 
-- Pending Blender export from the manually aligned scene.
-- Once exported, place it under `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`.
+- Completed. The final video has 300 frames at 30 fps and lasts 10 seconds.
+- It has been archived under `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`.
 
 ### 3DGS Pretrained Garden Render Check
 
