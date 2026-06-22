@@ -1,5 +1,11 @@
 # Topic 1 Final Submission Index
 
+Latest delivery folder:
+
+- `/root/HW3/reports/topic1_delivery_2026-06-22/`
+- Object C mesh zip: `/root/HW3/reports/topic1_delivery_2026-06-22/object_C_mesh/objectC_stable_zero123_it3000_mesh.zip`
+- Final fusion video placeholder: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`
+
 ## Git-tracked items
 
 - `topic1_fusion/README.md`
@@ -12,26 +18,35 @@
 
 ### Background `counter`
 
-- 3DGS training outputs: `/root/HW3/topic1_fusion/outputs/counter_7k/`, `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/`
-- Counter orbit render: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300_render/orbit.mp4`
-- Dense mesh workspace: `/root/HW3/topic1_fusion/outputs/counter_colmap_dense/`
-- Textured mesh: `/root/HW3/topic1_fusion/outputs/counter_texrecon/`
+- 3DGS training outputs: `/root/HW3/topic1_fusion/outputs/counter/gs_7k/`, `/root/HW3/topic1_fusion/outputs/counter/gs_30k_gpu5/`
+- Counter orbit render: `/root/HW3/topic1_fusion/outputs/counter/gs_30k_gpu5/counter_orbit_300_render/orbit.mp4`
+- Dense mesh workspace: `/root/HW3/topic1_fusion/outputs/counter/colmap_dense/`
+- Textured mesh: `/root/HW3/topic1_fusion/outputs/counter/texrecon/`
 
 ### Object A
 
-- 3DGS training outputs: `/root/HW3/topic1_fusion/outputs/object_A_7k/`, `/root/HW3/topic1_fusion/outputs/object_A_30k/`
-- Cleaned Blender asset: `/root/HW3/topic1_fusion/outputs/object_A_assets/object_A_clean.blend`
-- Dense mesh workspace: `/root/HW3/topic1_fusion/outputs/object_A_colmap_dense/`
-- Textured mesh: `/root/HW3/topic1_fusion/outputs/object_A_texrecon/`
+- 3DGS training outputs: `/root/HW3/topic1_fusion/outputs/object_A/gs_7k/`, `/root/HW3/topic1_fusion/outputs/object_A/gs_30k/`
+- Cleaned Blender asset: `/root/HW3/topic1_fusion/outputs/object_A/assets/object_A_clean.blend`
+- Dense mesh workspace: `/root/HW3/topic1_fusion/outputs/object_A/colmap_dense/`
+- Textured mesh: `/root/HW3/topic1_fusion/outputs/object_A/texrecon/`
 
 ### Object B
 
-- DreamFusion outputs: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/`
-- Smoke outputs: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-smoke/`
+- DreamFusion outputs: `/root/HW3/topic1_fusion/outputs/object_B/threestudio_runs/dreamfusion-sd15-full/`
+- Smoke outputs: `/root/HW3/topic1_fusion/outputs/object_B/threestudio_runs/dreamfusion-sd15-smoke/`
 
 ### Object C
 
-- Stable Zero123 outputs: `/root/HW3/topic1_fusion/outputs/threestudio/runs/stable-zero123-objectC/`
+- Stable Zero123 outputs: `/root/HW3/topic1_fusion/outputs/object_C/threestudio_runs/stable-zero123-objectC/`
+- Selected 3000-iteration mesh export: `/root/HW3/topic1_fusion/outputs/object_C/threestudio_runs/stable-zero123-objectC/objectC_202new_zero123_3000_20260616/save/it3000-export/`
+- 10000-iteration comparison videos: `/root/HW3/topic1_fusion/outputs/object_C/threestudio_runs/stable-zero123-objectC/objectC_202new_zero123_10000_20260616/save/`
+
+### Final report share package
+
+- Delivery folder: `/root/HW3/reports/topic1_delivery_2026-06-22/`
+- Figures: `/root/HW3/reports/topic1_delivery_2026-06-22/figures/`
+- Existing validation videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/`
+- Final fusion video: pending user export.
 
 ## Key scripts
 

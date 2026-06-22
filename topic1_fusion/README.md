@@ -32,6 +32,33 @@ Recommended external-storage files:
 
 ## Current Outputs
 
+## Final Delivery Snapshot 2026-06-22
+
+Share-ready folder:
+
+- `/root/HW3/reports/topic1_delivery_2026-06-22/`
+
+It contains:
+
+- Object C Stable Zero123 3000-iteration mesh package: `/root/HW3/reports/topic1_delivery_2026-06-22/object_C_mesh/objectC_stable_zero123_it3000_mesh.zip`
+- Object C validation videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it3000-val.mp4`, `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it3000-test.mp4`
+- Object C 10000-iteration comparison videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it10000-val.mp4`, `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it10000-test.mp4`
+- Report-ready figures: `/root/HW3/reports/topic1_delivery_2026-06-22/figures/`
+- Report snippets and artifact manifest: `/root/HW3/reports/topic1_delivery_2026-06-22/docs/`
+- Reproducibility helper scripts: `/root/HW3/reports/topic1_delivery_2026-06-22/scripts/`
+- Placeholder for final fusion mp4/keyframes: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`
+
+Object C version choice:
+
+- Final selected version: 3000 iterations.
+- Reason: the 3000 run has a complete `obj + mtl + texture_kd.jpg` export and was visually cleaner/more stable for Blender placement.
+- The 10000 run is kept as a longer-training comparison; validation videos exist, but no exported mesh package was found in the current output directory.
+
+Final fusion video status:
+
+- Pending Blender export from the manually aligned scene.
+- Once exported, place it under `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`.
+
 ### 3DGS Pretrained Garden Render Check
 
 - Source model: `/root/HW3/topic1_fusion/pretrained/garden/`

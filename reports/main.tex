@@ -1,0 +1,280 @@
+\documentclass[UTF8,a4paper,11pt]{ctexart}
+
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black
+}
+
+\title{深度学习与空间智能 HW3\\题目一：多源 3D 资产生成与场景融合实验报告}
+\author{成员 A}
+\date{2026 年 6 月}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本报告围绕题目一展开，目标是在统一背景场景中融合三类来源不同的三维资产：真实多视角重建物体 A、文本生成物体 B、单图生成物体 C。整体方案遵循 ``先分别得到可用 3D 资产，再统一到同一世界坐标系与相机轨迹下完成漫游渲染'' 的原则。我们选择 Mip-NeRF 360 的 \texttt{counter} 作为统一背景，使用 3D Gaussian Splatting（3DGS）完成背景与物体 A 的重建；使用 threestudio 中的 DreamFusion 与 Stable Zero123 分别生成物体 B 和物体 C；最后在 Blender 中导入背景相机轨迹与 textured mesh，完成多资产融合。实验结果表明：背景 \texttt{counter} 在 30k iteration 下达到 test PSNR 29.26，真实采集的物体 A 在 30k iteration 下达到 test PSNR 31.33；文本到 3D 与单图到 3D 的链路均可稳定导出带纹理的 \texttt{obj+mtl} 资产，并能在 Blender 中正常打开与放置。最终我们完成了从背景重建、物体生成、轨迹导入到融合渲染的完整工程闭环。
+\end{abstract}
+
+\section{任务目标与总体方案}
+
+题目一要求从三个不同来源构造可融合的 3D 资产，并放入同一个开源背景环境中进行统一渲染。三个资产来源分别为：
+\begin{enumerate}[itemsep=2pt]
+  \item 真实物体多视角重建（物体 A）；
+  \item 文本生成 3D（物体 B）；
+  \item 单张图像生成 3D（物体 C）。
+\end{enumerate}
+
+结合课程给出的约束以及本次实验的时间窗口，我们采用了如下总体策略：
+\begin{enumerate}[itemsep=2pt]
+  \item 以 Mip-NeRF 360 的 \texttt{counter} 场景作为统一背景；
+  \item 先分别完成 A/B/C 三条资产生成链路，验证各自能独立得到可渲染结果；
+  \item 再将三类资产统一到 Blender 中的同一相机轨迹与世界坐标系下；
+  \item 若某类资产不适合直接作为 mesh 使用，则提供 mesh 化或双 pass 合成的替代方案。
+\end{enumerate}
+
+这一方案的优点是工程风险低、可解释性强，并且每一条子链路都可以独立验证和展示，不会因为最后一步融合受阻而导致整题没有中间结果。
+
+\section{方法设计}
+
+\subsection{统一背景：Mip-NeRF 360 \texttt{counter} + 3DGS}
+
+背景场景从 Mip-NeRF 360 数据集中选取室内桌面场景 \texttt{counter}。选择该场景的原因有两点：第一，桌面尺度与物体 A/B/C 更匹配，便于在视觉上形成自然的摆放关系；第二，厨房台面语义与文本生成的汉堡模型较为协调，降低最终视频中的违和感。
+
+我们首先在 \texttt{counter} 上进行 3DGS 的 7k smoke training，用于快速验证数据路径、COLMAP 相机读取与 GPU 训练是否正常。验证通过后进一步执行 30k full training 作为最终背景模型，并保留 test/train 渲染图与 PSNR 指标。为了后续进入 Blender，我们又基于已有的 COLMAP 稠密点云运行网格重建与贴图流程，得到背景的 textured mesh 资产，使 \texttt{counter} 从 ``只有相机轨迹'' 升级为 ``可放置外来物体的真实背景环境''。
+
+\subsection{物体 A：真实多视角拍摄 + COLMAP + 3DGS}
+
+物体 A 采用手机视频环绕拍摄。原始采集后经抽帧与模糊帧过滤，保留一组清晰视图送入 COLMAP，完成稀疏重建与相机位姿恢复。随后将 COLMAP 输出转换到 3DGS 训练格式，先执行 7k iteration 的快速验证，再执行 30k iteration 的正式训练。
+
+这条链路的关键不只是得到一个高斯点表示，还要考虑后续与 Blender 的兼容性。纯高斯表示适合在 3DGS 渲染器内做新视角渲染，但不便于和来自 threestudio 的 mesh 资产直接混合。因此在后续阶段，我们进一步对物体 A 的稠密重建结果进行 mesh 化和纹理重建：先得到稠密 mesh，再手工清除无关背景点，最后使用 texrecon 生成带纹理的 \texttt{object\_A\_textured.obj}。这使得物体 A 最终也能以 mesh 形式导入 Blender。
+
+\subsection{物体 B：DreamFusion 文本到 3D}
+
+物体 B 选用 threestudio 的 DreamFusion 配置进行生成。根据执行方案中的保底路线，我们先使用官方示例 prompt ``a hamburger'' 做 100 step smoke test，仅验证 ``文本 $\rightarrow$ SDS 优化 $\rightarrow$ 视图输出'' 整条链路可达；随后将训练推进到 10000 step，导出 \texttt{obj+mtl+texture}。
+
+选择汉堡这一 prompt 的主要考虑是：其单主体语义明确、几何结构相对稳定，同时又与 \texttt{counter} 厨房背景语义一致，适合作为最终融合场景中的桌面物体。完整训练完成后，我们得到 test video、若干中间可视化图和最终导出的 textured mesh。
+
+\subsection{物体 C：Stable Zero123 单图到 3D}
+
+物体 C 采用单张图片驱动的 3D 生成路线。具体做法为：从候选照片中选出主体清晰、轮廓可分的玩具图像，对输入进行裁剪与透明背景抠图，得到居中的 RGBA 图，再使用 threestudio 的 Stable Zero123 配置进行生成。
+
+实验过程中我们分别尝试了较短步数与较长步数配置，最终发现 3000 step 版本在清晰度与形状稳定性之间取得了较好平衡，因此将其作为展示与导出的主版本。同时保留 10000 step 长训练版本，作为 ``训练更久并不一定视觉上更优'' 的对照。最终得到 \texttt{model.obj}、\texttt{model.mtl} 与 \texttt{texture\_kd.jpg}，可以直接在 Blender 中导入。
+
+\subsection{统一坐标与融合渲染}
+
+背景和物体资产准备完成后，最后的工程难点在于统一相机轨迹与坐标系。为此我们从 \texttt{counter} 的相机集合中采样出一条新的 300 帧环绕轨迹，生成 Blender 可读的 \texttt{counter\_orbit\_300\_blender.json}，并通过脚本导入为 \texttt{CounterOrbit300} 相机集合。
+
+统一轨迹的意义有两点：第一，它为后续的融合渲染提供了稳定的 ``骨架相机''；第二，它让 A/B/C 三类不同来源的资产都在同一个相机路径下接受检验。实践中我们选择将背景 \texttt{counter}、物体 A textured mesh、物体 B 汉堡 mesh 与物体 C 玩具 mesh 一同导入 Blender，进行位置、尺度和朝向调整，再以 orbit 相机漫游拍摄。对于仍保留为高斯形式的资产，也可以采用同轨迹双 pass 合成作为备选路径。
+
+\section{实验设置}
+
+\subsection{硬件与软件环境}
+
+本实验主要在实验室共享的 NVIDIA 4090 GPU 服务器上完成。题目一中，3DGS 背景训练、物体 A 训练以及 threestudio 的 DreamFusion/Zero123 训练主要使用大显存 GPU（3 号卡或 5 号卡）。软件环境按照功能拆分为独立 conda 环境，核心包括：
+\begin{itemize}[itemsep=2pt]
+  \item \texttt{env\_hw3\_recon}：用于 COLMAP、3DGS、稠密重建与 texrecon；
+  \item \texttt{env\_hw3\_gen3d}：用于 threestudio、DreamFusion 与 Stable Zero123；
+  \item Blender：用于轨迹导入、资产放置与最终漫游渲染。
+\end{itemize}
+
+\subsection{关键训练配置}
+
+\begin{table}[H]
+\centering
+\caption{题目一关键实验配置}
+\begin{tabular}{p{3.1cm}p{4.0cm}p{6.5cm}}
+\toprule
+模块 & 主要工具 & 核心设置 \\
+\midrule
+背景场景 & 3DGS & \texttt{counter}，7k smoke + 30k full \\
+物体 A & COLMAP + 3DGS & 手机环绕视频抽帧，7k smoke + 30k full \\
+物体 A mesh 化 & COLMAP dense + texrecon & 稠密 mesh + 清理背景杂面 + 纹理重建 \\
+物体 B & threestudio DreamFusion & prompt: ``a hamburger''，100 step smoke，10000 step full \\
+物体 C & Stable Zero123 & 透明背景 RGBA 输入，3000 step 主展示版本，10000 step 长训练对照 \\
+融合渲染 & Blender & 导入 \texttt{counter} textured mesh 与 \texttt{counter orbit} 相机轨迹 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{实验结果}
+
+\subsection{预训练场景 smoke check}
+
+在正式训练 \texttt{counter} 之前，我们先对 3DGS 官方预训练的 \texttt{garden} 场景执行渲染验证，确认本地环境能够正确加载配置、读取模型并输出 render/GT 对照图。这一步的价值在于把 ``环境问题'' 和 ``数据问题'' 分开：只有预训练场景 smoke check 通过，后续在 \texttt{counter} 或物体 A 上的异常才值得归因到数据或参数。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.88\linewidth]{figures/final_report/garden_pretrained_render_gt_contact_sheet.png}
+  \caption{3DGS 官方预训练 \texttt{garden} 场景的渲染验证结果。左侧为渲染图，右侧为对应 GT，对照表明渲染链路已正常打通。}
+\end{figure}
+
+\subsection{背景场景 \texttt{counter} 的重建结果}
+
+\texttt{counter} 的 7k 训练用于 smoke 验证，30k 训练作为最终背景结果。其 30k 模型在 test 集上达到 PSNR 29.2630，在 train 集上达到 PSNR 31.5692，说明背景几何与颜色都已达到较稳定的重建水平。更重要的是，背景不仅保留了 3DGS 表示，还进一步导出了 textured mesh，可用于 Blender 内的真实空间放置。
+
+\begin{table}[H]
+\centering
+\caption{\texttt{counter} 场景的 3DGS 重建指标}
+\begin{tabular}{cccc}
+\toprule
+实验 & Iteration & Test PSNR & Train PSNR \\
+\midrule
+\texttt{counter\_7k} & 7000 & 27.3455 & 28.9319 \\
+\texttt{counter\_30k} & 30000 & 29.2630 & 31.5692 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\linewidth]{figures/final_report/counter_30k_render_gt_contact_sheet.png}
+  \caption{\texttt{counter} 30k 模型的 render/GT 对照。可以看出台面、厨具与背景橱柜区域均已具备较好的空间一致性。}
+\end{figure}
+
+\subsection{物体 A 的真实重建结果}
+
+物体 A 经过 COLMAP + 3DGS 后，在 30k iteration 时达到 test PSNR 31.3322，优于 7k 版本的 31.1154；train PSNR 从 34.7399 提升到 37.7307。说明该物体在正式训练阶段仍获得了进一步收敛。与此同时，我们也观察到：仅依赖高斯点表示时，虽然新视角渲染质量不错，但不利于后续与 mesh 资产统一管理。因此又进一步完成了物体 A 的 mesh 化与纹理化，得到可导入 Blender 的 textured mesh 版本。
+
+\begin{table}[H]
+\centering
+\caption{物体 A 的 3DGS 重建指标}
+\begin{tabular}{cccc}
+\toprule
+实验 & Iteration & Test PSNR & Train PSNR \\
+\midrule
+\texttt{object\_A\_7k} & 7000 & 31.1154 & 34.7399 \\
+\texttt{object\_A\_30k} & 30000 & 31.3322 & 37.7307 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\linewidth]{figures/final_report/object_A_30k_render_gt_contact_sheet.png}
+  \caption{物体 A 在 30k iteration 下的 render/GT 对照。该结果验证了 ``手机拍摄 $\rightarrow$ COLMAP $\rightarrow$ 3DGS'' 真实重建链路的有效性。}
+\end{figure}
+
+\subsection{物体 B：DreamFusion 汉堡模型}
+
+DreamFusion 路线首先用 100 step 完成 smoke test，确认 SDS 优化与视图输出正常；随后在 10000 step 下得到完整汉堡模型，并成功导出 \texttt{obj+mtl+jpg}。从结果看，该模型虽然仍有生成式 3D 方法常见的局部模糊与几何不完全闭合问题，但整体造型、材质与颜色已经能够满足 ``作为场景中一个可识别的桌面物体'' 的要求。
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.31\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/hamburger_smoke_it100.png}
+    \caption{100 step smoke}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.31\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/hamburger_it10000_validation.png}
+    \caption{10000 step 验证视图}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.31\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/hamburger_texture_kd.jpg}
+    \caption{导出纹理}
+  \end{subfigure}
+  \caption{物体 B（汉堡）的 DreamFusion 生成结果。}
+\end{figure}
+
+\subsection{物体 C：Stable Zero123 结果}
+
+物体 C 使用抠图后的单张 RGBA 图片作为输入。实验中我们跑通了短步数、3000 step 和 10000 step 多个版本。从最终目视效果看，3000 step 版本已经能够形成较稳定的几何轮廓与纹理分布，因此选择其作为主展示与导出版本。相比之下，更长时间训练虽然产生了更多细节尝试，但也可能引入额外模糊和不稳定表面，说明单图生成 3D 的最优训练长度需要结合具体输入图像进行权衡，而不是盲目拉长步数。
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/objectC_training_strip.png}
+    \caption{训练过程多视图可视化}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/objectC_texture_kd.jpg}
+    \caption{3000 step 导出纹理}
+  \end{subfigure}
+  \caption{物体 C 的 Stable Zero123 训练与导出结果。}
+\end{figure}
+
+\subsection{背景轨迹导入与融合验证}
+
+背景 \texttt{counter} 不仅提供静态几何环境，也提供可驱动最终视频的相机运动。我们基于背景相机集合采样得到 300 帧环绕轨迹，并在 Blender 中成功导入。导入结果表明：相机轨迹可正常播放，且能够作为后续融合视频的统一拍摄视角。借助这一轨迹，我们完成了对物体摆放、尺度调节与视角漫游的验证。
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/counter_orbit_frame_0000.png}
+    \caption{轨迹起始帧}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{figures/final_report/counter_orbit_frame_0075.png}
+    \caption{轨迹中间帧}
+  \end{subfigure}
+  \caption{Blender 中导入 \texttt{counter} 环绕相机轨迹后的验证画面。}
+\end{figure}
+
+\subsection{三种资产生成方式对比}
+
+\begin{table}[H]
+\centering
+\caption{物体 A/B/C 三种资产生成方式的对比}
+\begin{tabular}{p{1.8cm}p{2.8cm}p{3.2cm}p{2.7cm}p{3.2cm}}
+\toprule
+物体 & 来源 & 优点 & 局限 & 最终交付形式 \\
+\midrule
+A & 真实多视角重建 & 几何与真实外观最贴近原物体；可计算 PSNR & 初始结果含背景杂点；需要额外 mesh 化与清理 & 3DGS 模型 + textured mesh \\
+B & 文本生成 3D & 无需采集数据；语义自由度高 & 局部形状存在生成噪声；细节依赖 prompt 与训练稳定性 & textured mesh \\
+C & 单图生成 3D & 采集成本最低；只需一张图 & 对抠图质量和输入视角敏感；长训练未必更优 & textured mesh \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+从实验结果看，三条路线各有明确角色：物体 A 负责体现真实采集与重建能力；物体 B 负责体现文本到 3D 的生成链路；物体 C 负责体现单图到 3D 的快速资产生成能力。三者并不互相替代，而是在同一背景环境中形成互补。
+
+\section{讨论}
+
+\subsection{题目一中真正的工程难点}
+
+本题最难的部分并不是单个模型的训练，而是 ``表示统一''。背景与物体 A 最初是 3DGS 高斯表示，而物体 B/C 天然导出为 mesh。若直接停留在各自最方便的表示上，那么最终融合时会出现工具链割裂：高斯适合在 3DGS 渲染器中看，mesh 适合在 Blender 中看，但两者不能无缝混放。因此我们后续又补做了两件事：一是将 \texttt{counter} 从高斯场扩展到 textured mesh；二是将物体 A 从高斯重建进一步扩展到 textured mesh。正是这一步，才让最终题目真正接近 ``可提交的融合工程''。
+
+\subsection{当前结果的不足}
+
+虽然整条管线已跑通，但仍有若干限制需要诚实说明：
+\begin{enumerate}[itemsep=2pt]
+  \item 物体 A 在早期版本中包含较多无关背景点，需要手工清理后才能得到更干净的 mesh；
+  \item DreamFusion 与 Zero123 生成的 mesh 仍存在局部模糊、法线不平滑或局部纹理拉伸现象；
+  \item 最终融合质量高度依赖 Blender 中的人工摆放与尺度调整，这一步难以完全自动化。
+\end{enumerate}
+
+不过这些局限并不影响题目一的核心目标达成：三类资产均已成功生成并落到统一背景中，说明方法链路本身是闭合的。
+
+\section{结论}
+
+本报告完成了题目一的完整技术实现与实验整理。首先，我们基于 Mip-NeRF 360 的 \texttt{counter} 场景训练出稳定的 3DGS 背景，并进一步得到可导入 Blender 的 textured mesh 背景；其次，我们分别完成了真实多视角重建物体 A、DreamFusion 文本生成物体 B 与 Stable Zero123 单图生成物体 C 的资产构建；最后，我们通过 Blender 导入统一相机轨迹与世界坐标系，完成多资产融合的工程闭环。
+
+从结果上看，真实重建路线在几何真实性上最强，文本生成路线在语义自由度上最强，单图生成路线在采集成本上最低。三者在统一背景中的互补性，正是本题最有价值的结论。后续若继续提升质量，可以从更强的背景/前景分割、更稳定的 mesh 纹理化以及自动化摆放优化三个方向继续改进。
+
+\end{document}
