@@ -8,32 +8,51 @@ __pycache__/
 venv/
 envs/
 
-# Large data and outputs
+# Large data and model outputs
 data/
 outputs/
 checkpoints/
 topic2_act/calvin_official/
+topic1_delivery_2026-06-22/
+topic1_delivery_2026-06-22.zip
 *.ply
 *.ckpt
 *.pth
 *.pt
 *.bin
+*.safetensors
 *.mp4
 *.mov
 *.avi
 *.zip
 *.tar
 *.tar.gz
+*.blend
+*.obj
+*.mtl
+*.wandb
 
 # Cache
 .hf_cache/
 .torch/
 .pip_cache/
 .cache/
+.conda_pkgs/
+hf_home/
 wandb/
 runs/
 logs/
 *.log
+
+# Root-level LaTeX build artifacts from `latexmk reports/main.tex`
+/main.aux
+/main.bbl
+/main.blg
+/main.fdb_latexmk
+/main.fls
+/main.out
+/main.pdf
+/main.synctex.gz
 
 # Local course materials and planning exports
 md/
@@ -42,3 +61,22 @@ pdf/
 # OS files
 .DS_Store
 Thumbs.db
+
+# External repositories
+topic1_fusion/code/threestudio/
+topic1_fusion/code/gaussian-splatting/
+third_party/
+
+# Topic1 local heavy assets
+topic1_fusion/data/
+topic1_fusion/outputs/
+topic1_fusion/pretrained/
+topic1_fusion/models/
+reports/topic1_week1_urgent_share.zip
+
+# Allow lightweight report figures to be tracked.
+!reports/figures/.gitkeep
+!reports/figures/**/MANIFEST.md
+!reports/figures/**/*.png
+!reports/figures/**/*.jpg
+!reports/figures/**/*.jpeg
