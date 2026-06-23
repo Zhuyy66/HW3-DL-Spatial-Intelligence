@@ -9,11 +9,6 @@ Week 1 work focuses on validating the end-to-end assets for the final 3DGS + AIG
 
 ## Week 1 Artifact Index
 
-Urgent share package:
-
-- `/root/HW3/reports/figures/topic1_week1_urgent/`
-- Manifest: `/root/HW3/reports/figures/topic1_week1_urgent/MANIFEST.md`
-
 Recommended Git-tracked files:
 
 - `topic1_fusion/README.md`
