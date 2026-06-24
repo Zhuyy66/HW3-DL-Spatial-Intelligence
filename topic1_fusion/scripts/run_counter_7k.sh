@@ -4,9 +4,12 @@ set -euo pipefail
 
 if [[ $# -lt 2 || $# -gt 3 ]]; then
   echo "Usage: $0 <counter_source_dir> <output_dir> [gpu_id]"
-  echo "Example: $0 /root/HW3/topic1_fusion/data/mipnerf360/counter /root/HW3/topic1_fusion/outputs/counter_7k 3"
+  echo "Example: $0 topic1_fusion/data/mipnerf360/counter topic1_fusion/outputs/counter_7k 3"
   exit 1
 fi
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
 
 SOURCE_DIR=$1
 OUTPUT_DIR=$2
@@ -29,7 +32,7 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-cd /root/HW3/topic1_fusion/code/gaussian-splatting
+cd "$REPO_ROOT/topic1_fusion/code/gaussian-splatting"
 
 OPTIMIZER_TYPE="default"
 if CUDA_VISIBLE_DEVICES="$GPU_ID" python - <<'PY' >/dev/null 2>&1

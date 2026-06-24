@@ -7,12 +7,14 @@ if [[ $# -gt 1 ]]; then
 fi
 
 GPU_ID=${1:-3}
-HF_HOME_DIR=${HF_HOME_DIR:-/root/HW3/hf_home}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+HF_HOME_DIR=${HF_HOME_DIR:-"$REPO_ROOT/hf_home"}
 TRIAL_NAME=${TRIAL_NAME:-dreamfusion-sd15-full}
 TRIAL_TAG=${TRIAL_TAG:-hamburger_full_20260603}
 WANDB_PROJECT=${WANDB_PROJECT:-hw3-topic1}
 WANDB_RUN_NAME=${WANDB_RUN_NAME:-dreamfusion_sd15_full_gpu${GPU_ID}}
-SD15_SNAPSHOT=${SD15_SNAPSHOT:-/root/HW3/hf_home/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14}
+SD15_SNAPSHOT=${SD15_SNAPSHOT:-"$HF_HOME_DIR/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14"}
 
 export HF_HOME="$HF_HOME_DIR"
 export TRANSFORMERS_OFFLINE=1
@@ -21,9 +23,9 @@ export HF_HUB_OFFLINE=1
 export WANDB_MODE=${WANDB_MODE:-online}
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 
-TRIAL_DIR="/root/HW3/topic1_fusion/code/threestudio/outputs/${TRIAL_NAME}/${TRIAL_TAG}"
+TRIAL_DIR="$REPO_ROOT/topic1_fusion/code/threestudio/outputs/${TRIAL_NAME}/${TRIAL_TAG}"
 
-cd /root/HW3/topic1_fusion/code/threestudio
+cd "$REPO_ROOT/topic1_fusion/code/threestudio"
 
 conda run -n env_hw3_gen3d python launch.py \
   --config configs/dreamfusion-sd.yaml \

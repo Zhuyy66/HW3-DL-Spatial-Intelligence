@@ -1,9 +1,10 @@
 import bpy
 from pathlib import Path
 
-ply_path = Path("/root/HW3/topic1_fusion/outputs/object_A_30k/point_cloud/iteration_30000/point_cloud.ply")
-out_blend = Path("/root/HW3/topic1_fusion/outputs/object_A_30k/object_A_mesh_attempt.blend")
-out_obj = Path("/root/HW3/topic1_fusion/outputs/object_A_30k/object_A_mesh_attempt.obj")
+repo_root = Path(__file__).resolve().parents[2]
+ply_path = repo_root / "topic1_fusion/outputs/object_A/gs_30k/point_cloud/iteration_30000/point_cloud.ply"
+out_blend = repo_root / "topic1_fusion/outputs/object_A/gs_30k/object_A_mesh_attempt.blend"
+out_obj = repo_root / "topic1_fusion/outputs/object_A/gs_30k/object_A_mesh_attempt.obj"
 
 # clean default scene
 bpy.ops.object.select_all(action="SELECT")

@@ -4,14 +4,15 @@ import torch
 from diffusers import StableDiffusionPipeline
 from huggingface_hub import hf_hub_download
 
-HF_HOME = os.environ.get("HF_HOME", "/root/HW3/hf_home")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+HF_HOME = os.environ.get("HF_HOME", str(REPO_ROOT / "hf_home"))
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("DIFFUSERS_OFFLINE", "1")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 print(f"HF_HOME={HF_HOME}")
 
-sd15_snapshot = "/root/HW3/hf_home/models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14"
+sd15_snapshot = str(Path(HF_HOME) / "models--runwayml--stable-diffusion-v1-5/snapshots/451f4fe16113bff5a5d2269ed5ad43b0592e9a14")
 pipe = StableDiffusionPipeline.from_pretrained(
     sd15_snapshot,
     local_files_only=True,

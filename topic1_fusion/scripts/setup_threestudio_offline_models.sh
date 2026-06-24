@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HF_HOME_DIR=${HF_HOME_DIR:-/root/HW3/hf_home}
-ZERO123_DIR=/root/HW3/topic1_fusion/code/threestudio/load/zero123
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+HF_HOME_DIR=${HF_HOME_DIR:-"$REPO_ROOT/hf_home"}
+ZERO123_DIR="$REPO_ROOT/topic1_fusion/code/threestudio/load/zero123"
 
 mkdir -p "$HF_HOME_DIR" "$ZERO123_DIR"
 

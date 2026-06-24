@@ -7,13 +7,15 @@ if [[ $# -gt 1 ]]; then
 fi
 
 GPU_ID=${1:-5}
-HF_HOME_DIR=${HF_HOME_DIR:-/root/HW3/hf_home}
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=$(cd "$SCRIPT_DIR/../.." && pwd)
+HF_HOME_DIR=${HF_HOME_DIR:-"$REPO_ROOT/hf_home"}
 TRIAL_NAME=${TRIAL_NAME:-stable-zero123-objectC}
 TRIAL_TAG=${TRIAL_TAG:-zombie_20260616}
 WANDB_PROJECT=${WANDB_PROJECT:-hw3-topic1}
 WANDB_RUN_NAME=${WANDB_RUN_NAME:-stable_zero123_object_C_gpu${GPU_ID}}
 WANDB_ENABLE=${WANDB_ENABLE:-false}
-IMAGE_PATH=${IMAGE_PATH:-/root/HW3/topic1_fusion/data/object_C/input_rgba.png}
+IMAGE_PATH=${IMAGE_PATH:-"$REPO_ROOT/topic1_fusion/data/object_C/input_rgba.png"}
 MAX_STEPS=${MAX_STEPS:-600}
 VAL_CHECK_INTERVAL=${VAL_CHECK_INTERVAL:-100}
 CHECKPOINT_STEPS=${CHECKPOINT_STEPS:-100}
@@ -35,11 +37,11 @@ export WANDB_MODE=${WANDB_MODE:-offline}
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
-TRIAL_DIR="/root/HW3/topic1_fusion/code/threestudio/outputs/${TRIAL_NAME}/${TRIAL_TAG}"
+TRIAL_DIR="$REPO_ROOT/topic1_fusion/code/threestudio/outputs/${TRIAL_NAME}/${TRIAL_TAG}"
 
 PYTHON_BIN=${PYTHON_BIN:-/opt/conda/envs/env_hw3_gen3d/bin/python}
 
-cd /root/HW3/topic1_fusion/code/threestudio
+cd "$REPO_ROOT/topic1_fusion/code/threestudio"
 
 "$PYTHON_BIN" -u launch.py \
   --config configs/stable-zero123.yaml \

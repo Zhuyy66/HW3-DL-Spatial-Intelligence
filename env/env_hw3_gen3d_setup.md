@@ -21,7 +21,7 @@ pip install ninja
 
 pip install torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 --index-url https://download.pytorch.org/whl/cu121
 
-cd /root/HW3/topic1_fusion/code/threestudio
+cd topic1_fusion/code/threestudio
 
 pip install "setuptools<70" wheel packaging
 pip install pybind11
@@ -34,7 +34,7 @@ pip install -e .
 
 ```bash
 conda activate env_hw3_gen3d
-cd /root/HW3/topic1_fusion/code/threestudio
+cd topic1_fusion/code/threestudio
 
 python -c "import torch; print(torch.__version__, torch.version.cuda)"
 python -c "import threestudio; print('threestudio import ok')"
@@ -54,7 +54,7 @@ On 2026-05-29, the goal is only to get the installation onto a stable path:
 
 Current validated fixes for `env_hw3_gen3d`:
 
-1. `pip install -e /root/HW3/topic1_fusion/code/threestudio`
+1. `pip install -e topic1_fusion/code/threestudio`
 2. `huggingface_hub` must stay below `0.26` for this `diffusers` stack.
 3. `threestudio/threestudio/utils/ops.py` needed a small `libigl` compatibility fix because `libigl 2.6.2` exposes `fast_winding_number` and `readOBJ` instead of `fast_winding_number_for_meshes` and `read_obj`.
 
@@ -65,7 +65,7 @@ After these fixes, `conda run -n env_hw3_gen3d python -c "import threestudio"` s
 Recommended cache root:
 
 ```bash
-export HF_HOME=/root/HW3/hf_home
+export HF_HOME=$PWD/hf_home
 export TRANSFORMERS_OFFLINE=1
 export DIFFUSERS_OFFLINE=1
 export HF_HUB_OFFLINE=1
@@ -73,14 +73,14 @@ export HF_HUB_OFFLINE=1
 
 Helper scripts added:
 
-- `/root/HW3/topic1_fusion/scripts/setup_threestudio_offline_models.sh`
-- `/root/HW3/topic1_fusion/scripts/verify_threestudio_offline_models.py`
-- `/root/HW3/topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh`
+- `topic1_fusion/scripts/setup_threestudio_offline_models.sh`
+- `topic1_fusion/scripts/verify_threestudio_offline_models.py`
+- `topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh`
 
 ## 100-Step DreamFusion Smoke Test
 
 ```bash
-bash /root/HW3/topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh 0
+bash topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh 0
 ```
 
 This runs:

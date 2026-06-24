@@ -25,7 +25,7 @@ conda install -c conda-forge colmap -y
 ## Install 3DGS
 
 ```bash
-cd /root/HW3/topic1_fusion/code/gaussian-splatting
+cd topic1_fusion/code/gaussian-splatting
 
 pip install -e submodules/simple-knn
 pip install -e submodules/diff-gaussian-rasterization
@@ -40,7 +40,7 @@ Core checks:
 
 ```bash
 conda activate env_hw3_recon
-cd /root/HW3/topic1_fusion/code/gaussian-splatting
+cd topic1_fusion/code/gaussian-splatting
 
 python train.py --help
 python render.py --help
