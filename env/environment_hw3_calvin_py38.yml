@@ -1,0 +1,23 @@
+name: env_hw3_calvin_eval
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip
+  - ffmpeg
+  - libgcc-ng
+  - libstdcxx-ng
+  - pip:
+      - "setuptools==57.5.0"
+      - wheel
+      - "cmake==3.18.4.post1"
+      - "numpy<2"
+      - scipy
+      - pandas
+      - matplotlib
+      - opencv-python-headless
+      - hydra-core
+      - omegaconf
+      - pybullet
+      - safetensors
+      - rich

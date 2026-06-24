@@ -1,0 +1,22 @@
+name: env_hw3_robot
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pip
+  - ffmpeg=6
+  - libgcc-ng
+  - libstdcxx-ng
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu118
+      - "torch==2.6.0+cu118"
+      - "torchvision==0.21.0+cu118"
+      - "torchaudio==2.6.0+cu118"
+      - "torchcodec==0.2.1"
+      - "lerobot==0.4.0"
+      - datasets
+      - huggingface_hub
+      - pandas
+      - pyarrow
+      - safetensors
+      - wandb
