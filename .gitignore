@@ -62,6 +62,9 @@ topic1_fusion/models/
 
 # Keep only lightweight report figures tracked by default.
 reports/topic1_week1_urgent_share.zip
+reports/share/
+reports/topic1_delivery_*/
+/报告初稿*/
 
 # Allow small docs/scripts/manifests to be tracked normally.
 !reports/figures/.gitkeep

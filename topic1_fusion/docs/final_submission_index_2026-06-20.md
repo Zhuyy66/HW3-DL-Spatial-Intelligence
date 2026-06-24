@@ -1,19 +1,21 @@
-# Topic 1 Final Submission Index
+# Topic 1 Artifact Index
 
-Latest delivery folder:
+This file records the Topic 1 artifacts that are too large to keep in Git, plus the lightweight files that are tracked in the repository.
 
-- `/root/HW3/reports/topic1_delivery_2026-06-22/`
+## Tracked report files
+
+- Report source: `/root/HW3/reports/main.tex`
+- Report figures: `/root/HW3/reports/figures/final_report/`
+- Topic 1 scripts: `/root/HW3/topic1_fusion/scripts/`
+- Topic 1 README: `/root/HW3/topic1_fusion/README.md`
+
+## Local delivery package
+
+- Delivery folder: `/root/HW3/reports/topic1_delivery_2026-06-22/`
+- Delivery zip: `/root/HW3/reports/topic1_delivery_2026-06-22.zip`
 - Object C mesh zip: `/root/HW3/reports/topic1_delivery_2026-06-22/object_C_mesh/objectC_stable_zero123_it3000_mesh.zip`
 - Final fusion video: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
 - Final fusion keyframes: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/keyframes/`
-
-## Git-tracked items
-
-- `topic1_fusion/README.md`
-- `topic1_fusion/docs/`
-- `topic1_fusion/scripts/`
-- `reports/figures/topic1_week1_urgent/MANIFEST.md`
-- Small illustrative figures under `reports/figures/topic1_week1_urgent/`
 
 ## Local large artifacts kept outside Git
 
@@ -42,7 +44,7 @@ Latest delivery folder:
 - Selected 3000-iteration mesh export: `/root/HW3/topic1_fusion/outputs/object_C/threestudio_runs/stable-zero123-objectC/objectC_202new_zero123_3000_20260616/save/it3000-export/`
 - 10000-iteration comparison videos: `/root/HW3/topic1_fusion/outputs/object_C/threestudio_runs/stable-zero123-objectC/objectC_202new_zero123_10000_20260616/save/`
 
-### Final report share package
+### Final report delivery package
 
 - Delivery folder: `/root/HW3/reports/topic1_delivery_2026-06-22/`
 - Figures: `/root/HW3/reports/topic1_delivery_2026-06-22/figures/`

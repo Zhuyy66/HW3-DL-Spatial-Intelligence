@@ -1,186 +1,94 @@
-# Topic 1 Fusion
+# Topic 1: Multi-Source 3D Asset Fusion
 
-Week 1 work focuses on validating the end-to-end assets for the final 3DGS + AIGC fusion pipeline:
+Topic 1 constructs a unified 3D scene from a real reconstructed background, a real captured object, a text-generated object, and a single-image-generated object. The final result is rendered as a 300-frame Blender orbit video in the Mip-NeRF 360 `counter` scene.
 
-- Background scene: Mip-NeRF 360 `counter`, trained with 3DGS.
-- Object A: real phone-captured object reconstructed with COLMAP + 3DGS.
-- Object B smoke/full chain: text-to-3D with threestudio DreamFusion, prompt `a hamburger`.
-- Camera bridge: sampled `counter` orbit trajectory and Blender import validation.
+## Pipeline Overview
 
-## Week 1 Artifact Index
+The project follows four stages:
 
-Urgent share package:
+1. Reconstruct the `counter` background with 3D Gaussian Splatting.
+2. Reconstruct `object_A` from phone-captured multi-view video with COLMAP and 3DGS.
+3. Generate object B and object C with threestudio:
+   - object B: DreamFusion, prompt `a hamburger`
+   - object C: Stable Zero123 from one RGBA input image
+4. Convert usable assets to textured meshes and align them in Blender under a shared 300-frame orbit camera trajectory.
 
-- `/root/HW3/reports/figures/topic1_week1_urgent/`
-- Manifest: `/root/HW3/reports/figures/topic1_week1_urgent/MANIFEST.md`
+The final rendering path uses textured meshes in Blender. The Gaussian assets are kept as reconstruction evidence and as a fallback representation for same-trajectory rendering.
 
-Recommended Git-tracked files:
+## Main Results
 
-- `topic1_fusion/README.md`
-- `topic1_fusion/docs/*.md`
-- `topic1_fusion/scripts/*.py`
-- `topic1_fusion/scripts/*.sh`
-- Small report images in `reports/figures/`
+### 3DGS Reconstruction Metrics
 
-Recommended external-storage files:
+| Asset | Iteration | Test PSNR | Train PSNR | W&B run id |
+|---|---:|---:|---:|---|
+| `counter` | 7000 | 27.3455 | 28.9319 | `zo8odz6d` |
+| `counter` | 30000 | 29.2630 | 31.5692 | `q8rwxr2b` |
+| `object_A` | 7000 | 31.1154 | 34.7399 | `2ix2e3sx` |
+| `object_A` | 30000 | 31.3322 | 37.7307 | `stb4ukx9` |
 
-- Raw datasets under `topic1_fusion/data/`
-- 3DGS outputs under `topic1_fusion/outputs/`
-- Pretrained model zips and checkpoints under `topic1_fusion/pretrained/`
-- threestudio outputs, checkpoints, meshes, videos, and W&B run folders
-- `.ply`, `.ckpt`, `.mp4`, `.zip`, `.bin`, and other large binary artifacts
+### Generated Assets
 
-## Current Outputs
+| Asset | Method | Selected version | Output form |
+|---|---|---|---|
+| object B hamburger | DreamFusion + SD 1.5 | 10000 iterations | textured OBJ/MTL |
+| object C toy | Stable Zero123 | 3000 iterations | textured OBJ/MTL |
 
-## Final Delivery Snapshot 2026-06-22
+The 3000-iteration object C run is used in the final scene because it has a complete mesh/material/texture export and was visually more stable for Blender placement. The 10000-iteration run is retained as a longer-training comparison video.
 
-Share-ready folder:
+### Final Fusion Video
 
-- `/root/HW3/reports/topic1_delivery_2026-06-22/`
+The final fusion render is a 300-frame, 30 fps, 10-second Blender video at `3114 x 2076` resolution. The mp4 and keyframes are kept outside Git and documented in the artifact manifest.
 
-It contains:
+Report-ready keyframes are tracked in:
 
-- Object C Stable Zero123 3000-iteration mesh package: `/root/HW3/reports/topic1_delivery_2026-06-22/object_C_mesh/objectC_stable_zero123_it3000_mesh.zip`
-- Object C validation videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it3000-val.mp4`, `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it3000-test.mp4`
-- Object C 10000-iteration comparison videos: `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it10000-val.mp4`, `/root/HW3/reports/topic1_delivery_2026-06-22/videos/objectC_it10000-test.mp4`
-- Final fusion video: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/topic1_final_fusion_counter_ABC.mp4`
-- Final fusion keyframes: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/keyframes/`
-- Report-ready figures: `/root/HW3/reports/topic1_delivery_2026-06-22/figures/`
-- Report snippets and artifact manifest: `/root/HW3/reports/topic1_delivery_2026-06-22/docs/`
-- Reproducibility helper scripts: `/root/HW3/reports/topic1_delivery_2026-06-22/scripts/`
-- Placeholder for final fusion mp4/keyframes: `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`
-
-Object C version choice:
-
-- Final selected version: 3000 iterations.
-- Reason: the 3000 run has a complete `obj + mtl + texture_kd.jpg` export and was visually cleaner/more stable for Blender placement.
-- The 10000 run is kept as a longer-training comparison; validation videos exist, but no exported mesh package was found in the current output directory.
-
-Final fusion video status:
-
-- Completed. The final video has 300 frames at 30 fps and lasts 10 seconds.
-- It has been archived under `/root/HW3/reports/topic1_delivery_2026-06-22/place_final_fusion_video_here/`.
-
-### 3DGS Pretrained Garden Render Check
-
-- Source model: `/root/HW3/topic1_fusion/pretrained/garden/`
-- Render output: `/root/HW3/topic1_fusion/pretrained/garden/test/ours_30000/`
-- Share figure: `/root/HW3/reports/figures/topic1_week1_urgent/garden_pretrained/garden_pretrained_render_gt_contact_sheet.png`
-
-Command:
-
-```bash
-bash /root/HW3/topic1_fusion/scripts/run_garden_smoke_render.sh \
-  /root/HW3/topic1_fusion/pretrained/garden \
-  /root/HW3/topic1_fusion/data/mipnerf360/garden \
-  3
+```text
+reports/figures/final_report/
 ```
 
-### Counter Background 3DGS
+## Important Local Artifacts
 
-- 7k output: `/root/HW3/topic1_fusion/outputs/counter_7k/`
-- 30k output: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/`
-- 30k render output: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/test/ours_30000/`
-- Share figure: `/root/HW3/reports/figures/topic1_week1_urgent/counter/counter_30k_render_gt_contact_sheet.png`
-- Orbit video: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300_render/orbit.mp4`
+Large artifacts are intentionally not tracked by Git.
 
-Metrics:
-
-- 7k: test PSNR 27.3455, train PSNR 28.9319, W&B run id `zo8odz6d`.
-- 30k: test PSNR 29.2630, train PSNR 31.5692, W&B run id `q8rwxr2b`.
-
-Commands:
-
-```bash
-bash /root/HW3/topic1_fusion/scripts/run_counter_7k.sh \
-  /root/HW3/topic1_fusion/data/mipnerf360/counter \
-  /root/HW3/topic1_fusion/outputs/counter_7k \
-  5
+```text
+topic1_fusion/outputs/counter/gs_30k_gpu5/
+topic1_fusion/outputs/counter/texrecon/
+topic1_fusion/outputs/object_A/gs_30k/
+topic1_fusion/outputs/object_A/texrecon/
+topic1_fusion/outputs/object_B/threestudio_runs/dreamfusion-sd15-full/
+topic1_fusion/outputs/object_C/threestudio_runs/stable-zero123-objectC/
+reports/topic1_delivery_2026-06-22.zip
 ```
 
-```bash
-# Full 30k run used GPU 5 and wrote to counter_30k_gpu5.
-# See local W&B summary and output.log for exact metrics.
+The detailed local artifact index is:
+
+```text
+topic1_fusion/docs/final_submission_index_2026-06-20.md
 ```
 
-### object_A Real Capture 3DGS
+## Scripts
 
-- 7k output: `/root/HW3/topic1_fusion/outputs/object_A_7k/`
-- 30k output: `/root/HW3/topic1_fusion/outputs/object_A_30k/`
-- 30k render output: `/root/HW3/topic1_fusion/outputs/object_A_30k/test/ours_30000/`
-- Final Gaussian file: `/root/HW3/topic1_fusion/outputs/object_A_30k/point_cloud/iteration_30000/point_cloud.ply`
-- Share figure: `/root/HW3/reports/figures/topic1_week1_urgent/object_A/object_A_30k_render_gt_contact_sheet.png`
+Key scripts kept in Git:
 
-Metrics:
-
-- 7k: test PSNR 31.1154, train PSNR 34.7399, W&B run id `2ix2e3sx`.
-- 30k: test PSNR 31.3322, train PSNR 37.7307, W&B run id `stb4ukx9`.
-
-Current limitation:
-
-- object_A is still best treated as a Gaussian/point-cloud-like asset for placement validation.
-- A direct point-cloud-to-mesh attempt produced an unusable coarse box-like OBJ, so the short repair path is point cleanup, better foreground masking/frame selection, or transparent reporting of the limitation.
-
-### Blender Camera Bridge
-
-- Counter original camera import: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_camera_import.blend`
-- Sampled orbit JSON: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300.json`
-- Blender-compatible orbit JSON: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300_blender.json`
-- Blender orbit import: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300_import.blend`
-- Rendered orbit: `/root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300_render/orbit.mp4`
-
-Commands:
-
-```bash
-python /root/HW3/topic1_fusion/scripts/sample_camera_trajectory.py \
-  --input_cameras /root/HW3/topic1_fusion/outputs/counter_30k_gpu5/cameras.json \
-  --output_json /root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300.json \
-  --num_frames 300
+```text
+topic1_fusion/scripts/filter_blurry.py
+topic1_fusion/scripts/run_counter_7k.sh
+topic1_fusion/scripts/sample_camera_trajectory.py
+topic1_fusion/scripts/blender_import_cameras.py
+topic1_fusion/scripts/export_blender_transforms.py
+topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh
+topic1_fusion/scripts/run_dreamfusion_sd15_full.sh
+topic1_fusion/scripts/run_object_c_stable_zero123.sh
+topic1_fusion/scripts/run_colmap_dense_mesh.sh
+topic1_fusion/scripts/prepare_texrecon_scene.py
 ```
 
-```bash
-blender -b --python /root/HW3/topic1_fusion/scripts/blender_import_cameras.py -- \
-  --transforms_json /root/HW3/topic1_fusion/outputs/counter_30k_gpu5/counter_orbit_300_blender.json \
-  --camera_name CounterOrbitCamera \
-  --collection_name CounterOrbit300 \
-  --create_markers
+## Report Figures
+
+The final report uses:
+
+```text
+reports/figures/final_report/
 ```
 
-Open issue:
+This folder contains the 3DGS render-vs-GT contact sheets, DreamFusion/Zero123 asset checks, counter orbit frames, and final fusion keyframes.
 
-- A combined Blender screenshot with `object_A` placed and viewed by the counter orbit camera still needs to be captured and added to `reports/figures/`.
-
-### Threestudio DreamFusion Hamburger
-
-- Smoke output: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-smoke/hamburger_100step_20260602_v2/`
-- Full output: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/`
-- Full validation image: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-0.png`
-- Full test video: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-test.mp4`
-- Exported mesh: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/model.obj`
-- Exported material: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/model.mtl`
-- Exported texture: `/root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full/hamburger_full_20260603/save/it10000-export/texture_kd.jpg`
-- W&B run id: `0w5yldmf`
-
-Commands:
-
-```bash
-bash /root/HW3/topic1_fusion/scripts/run_dreamfusion_sd15_smoke.sh
-```
-
-```bash
-nohup bash /root/HW3/topic1_fusion/scripts/run_dreamfusion_sd15_full.sh \
-  > /root/HW3/topic1_fusion/outputs/threestudio/runs/dreamfusion-sd15-full_hamburger_20260603.nohup.log 2>&1 &
-```
-
-## Cleanup Notes
-
-- threestudio experiment outputs and W&B folders are now unified under `/root/HW3/topic1_fusion/outputs/threestudio/`.
-- Compatibility symlinks remain at `/root/HW3/topic1_fusion/code/threestudio/outputs` and `/root/HW3/topic1_fusion/code/threestudio/wandb`.
-- Manual Blender cleanup asset for object_A is now stored at `/root/HW3/topic1_fusion/outputs/object_A_assets/object_A_clean.blend`.
-- Dense meshing caches under `outputs/counter_colmap_dense/` and `outputs/object_A_colmap_dense/` were slimmed down by removing regenerable `images/` and `stereo/` directories while keeping fused point clouds and final mesh files.
-
-## Next Fixes
-
-- Capture one Blender screenshot/video frame where `object_A` is placed in the `counter` camera/orbit scene.
-- Decide object_A repair path: foreground-only point cleanup, stronger frame filtering, or explicit limitation in the final report.
-- Keep large binary outputs outside Git and record external download paths when sharing with teammates.
