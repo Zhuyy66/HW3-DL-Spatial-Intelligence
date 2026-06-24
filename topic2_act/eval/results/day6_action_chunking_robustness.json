@@ -1,0 +1,86 @@
+{
+  "chunking_rows": [
+    {
+      "chunk_early_0_9_l1": 0.6023097874429791,
+      "chunk_late_55_64_l1": 0.8245865255815948,
+      "chunk_mid_25_34_l1": 0.6954625544879043,
+      "chunk_offset_0_l1": 0.600226525118231,
+      "chunk_offset_tail": 64,
+      "chunk_offset_tail_l1": 0.8331453328002029,
+      "distribution_count": 308918,
+      "frame_l1_mean": 0.6347922352136487,
+      "frame_l1_median": 0.6131761512521678,
+      "frame_l1_p75": 0.7887565958173719,
+      "frame_l1_p95": 1.0626858555419103,
+      "model": "A-only",
+      "normalized_action_l1": 0.658629341784413,
+      "raw_action_l1": 0.19335991432529512,
+      "raw_frame_l1_median": 0.1707104664184248
+    },
+    {
+      "chunk_early_0_9_l1": 0.5192004707086169,
+      "chunk_late_55_64_l1": 0.7095295932342452,
+      "chunk_mid_25_34_l1": 0.6236440464300326,
+      "chunk_offset_0_l1": 0.5136463915566513,
+      "chunk_offset_tail": 64,
+      "chunk_offset_tail_l1": 0.735695526264565,
+      "distribution_count": 308918,
+      "frame_l1_mean": 0.5531163469794353,
+      "frame_l1_median": 0.5210675582360653,
+      "frame_l1_p75": 0.7004387542500072,
+      "frame_l1_p95": 0.9728413618653176,
+      "model": "ABC",
+      "normalized_action_l1": 0.5779933677322112,
+      "raw_action_l1": 0.16869575322174254,
+      "raw_frame_l1_median": 0.14174647671089735
+    }
+  ],
+  "formal_success_rate_note": "not run as a formal closed-loop benchmark; strict EGL was limited by the system graphics stack; see direct-cameras smoke evidence",
+  "metric_primary": "open-loop Action L1 on official splitD",
+  "relative_reduction": {
+    "frame_l1_p95": 0.08454473465328763,
+    "normalized_action_l1": 0.12242997530862527,
+    "raw_action_l1": 0.12755570972202296
+  },
+  "rows": [
+    {
+      "checkpoint": "topic2_act/outputs/act_calvin/a_only_full_150k/lerobot_train/checkpoints/150000/pretrained_model",
+      "d_normalized_action_l1": 0.658629341784413,
+      "d_raw_action_l1": 0.19335991432529512,
+      "direct_cameras_smoke_evidence": "A-only direct-cameras smoke: steps=60, moved=True, max_tcp_delta=0.264235, last_action_shape=[7]; json=topic2_act/eval/results/a_only_direct_cameras_smoke.json, log=logs/Week3_Day4/day4_a_only_closed_loop_direct_cameras.log",
+      "formal_closed_loop_success_rate": "not run as a formal closed-loop benchmark; strict EGL was limited by the system graphics stack; see direct-cameras smoke evidence",
+      "model": "A-only",
+      "source_log_result_path": "topic2_act/eval/results/a_only_splitD_action_l1_day6_distribution.json",
+      "steps": 150000,
+      "training_data": "splitA"
+    },
+    {
+      "checkpoint": "topic2_act/outputs/act_calvin/abc_full_150k/lerobot_train/checkpoints/150000/pretrained_model",
+      "d_normalized_action_l1": 0.5779933677322112,
+      "d_raw_action_l1": 0.16869575322174254,
+      "direct_cameras_smoke_evidence": "ABC direct-cameras smoke: steps=60, moved=True, max_tcp_delta=0.135650, last_action_shape=[7]; json=topic2_act/eval/results/abc_direct_cameras_smoke.json, log=logs/Week3_Day5/day5_abc_closed_loop_direct_cameras.log",
+      "formal_closed_loop_success_rate": "not run as a formal closed-loop benchmark; strict EGL was limited by the system graphics stack; see direct-cameras smoke evidence",
+      "model": "ABC",
+      "source_log_result_path": "topic2_act/eval/results/abc_splitD_action_l1_day6_distribution.json",
+      "steps": 150000,
+      "training_data": "splitA+splitB+splitC"
+    }
+  ],
+  "sources": {
+    "a_only_manifest": "topic2_act/outputs/act_calvin/a_only_full_150k/run_manifest.json",
+    "a_only_result": "topic2_act/eval/results/a_only_splitD_action_l1_day6_distribution.json",
+    "abc_manifest": "topic2_act/outputs/act_calvin/abc_full_150k/run_manifest.json",
+    "abc_result": "topic2_act/eval/results/abc_splitD_action_l1_day6_distribution.json",
+    "act_defaults": "topic2_act/configs/act_default_v0.4.0.dump.txt",
+    "week3_config": "topic2_act/configs/act_calvin_week3_150k.yaml"
+  },
+  "status": "completed",
+  "validation": {
+    "action_dim": 7,
+    "chunk_size": 100,
+    "episode_count": 5124,
+    "frame_count": 308918,
+    "metric_space": "normalized_action",
+    "raw_metric_space": "dataset_action_units"
+  }
+}

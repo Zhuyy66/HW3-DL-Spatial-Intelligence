@@ -1,0 +1,101 @@
+# Day 3 Topic2 ACT baseline configuration for official CALVIN LeRobot splits.
+#
+# Network architecture fields are intentionally inherited from the installed
+# lerobot==0.4.0 ACTConfig defaults. Generate the exact server-side default dump
+# with:
+#   python topic2_act/scripts/audit_calvin_dataset.py --inspect-lerobot-act-defaults \
+#     --output-act-dump topic2_act/configs/act_default_v0.4.0.dump.txt
+
+project:
+  name: hw3-topic2
+  task: calvin_lerobot_official_splits
+  policy: act
+  owner: member_b
+
+dataset:
+  repo_id: xiaoma26/calvin-lerobot
+  split_name: splitA
+  observed_codebase_version: v2.1
+  training_loader_note: confirm v2.1 support or convert to LeRobot v3.0 before direct lerobot==0.4.0 training
+  local_root: topic2_act/data/xiaoma26_calvin_lerobot/splitA
+  server_generated_split_root: topic2_act/data/splits/xiaoma26_calvin_lerobot
+  split_root: topic2_act/dataset_split/xiaoma26_calvin_lerobot
+  a_only_default_episodes: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_smoke500.json
+  a_only_full_episodes: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_full.json
+  official_summary: topic2_act/dataset_split/xiaoma26_calvin_lerobot/official_split_summary.json
+  fps: 10
+  scene: A
+  official_counts:
+    splitA:
+      scene: A
+      episodes: 6089
+      frames: 366693
+      fps: 10
+    splitB:
+      scene: B
+      episodes: 6115
+      frames: 367096
+      fps: 10
+    splitC:
+      scene: C
+      episodes: 5666
+      frames: 337954
+      fps: 10
+    splitD:
+      scene: D
+      episodes: 5124
+      frames: 308918
+      fps: 10
+  observation_state_key: state
+  action_key: actions
+  image_keys:
+    - image
+    - wrist_image
+  task_key: task_index
+  env_label_source: official xiaoma26 split directory and per-episode scene field
+  schema:
+    state_shape: [15]
+    actions_shape: [7]
+    image_shape: [200, 200, 3]
+    wrist_image_shape: [84, 84, 3]
+
+policy:
+  type: act
+  lerobot_version: 0.4.0
+  inherit_act_config_defaults: true
+  defaults_dump: topic2_act/configs/act_default_v0.4.0.dump.txt
+  chunk_size: 100
+  n_action_steps: 100
+
+optimization:
+  optimizer: adamw
+  learning_rate: 1.0e-5
+  weight_decay: 1.0e-4
+  batch_size: 8
+  epochs: 50
+  smoke_test_epochs: 5
+  seed: 20260529
+  gradient_clip_norm: 10.0
+
+logging:
+  backend: wandb
+  project: hw3-topic2
+  log_freq: 100
+  save_freq: 1
+  output_dir: topic2_act/outputs/act_calvin
+
+training_variants:
+  a_only:
+    episodes_file: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_smoke500.json
+    full_episodes_file: topic2_act/dataset_split/xiaoma26_calvin_lerobot/episodes_A_full.json
+    run_name: act_calvin_a_only
+  abc_joint:
+    episodes_file: null
+    run_name: act_calvin_abc_joint
+    note: splitA/splitB/splitC episode_index values each start at 0; use multi-dataset loading or remap indices before joint training
+
+guards:
+  use_official_split_as_production_path: true
+  legacy_scene_info_split_retired: true
+  do_not_use_legacy_episodes_ABC_for_training: true
+  require_official_split_metadata_validation: true

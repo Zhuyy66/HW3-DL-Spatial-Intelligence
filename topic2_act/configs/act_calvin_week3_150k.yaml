@@ -1,0 +1,90 @@
+# Week 3 Day 2 comparable-budget ACT configuration.
+#
+# A-only and ABC share every training hyperparameter below. The only intentional
+# difference is the dataset path / episode list.
+
+project:
+  name: hw3-topic2
+  task: calvin_week3_comparable_budget
+  policy: act
+  owner: member_b
+
+budget:
+  comparison_unit: gradient_steps
+  shared_steps: 150000
+  reason: Day 1 measured 0.1135 s/step after DataLoader tuning, so time is no longer the limiting constraint.
+  checkpoint_policy: save every 50000 steps and retain the latest 2 numeric checkpoint directories during full runs
+
+data:
+  source_repo_id: xiaoma26/calvin-lerobot
+  source_root: topic2_act/data/xiaoma26_calvin_lerobot
+  split_root: topic2_act/data/splits/xiaoma26_calvin_lerobot
+  schema:
+    state_key: observation.state
+    action_key: action
+    static_image_key: observation.images.image
+    wrist_image_key: observation.images.wrist_image
+    state_shape: [15]
+    action_shape: [7]
+    image_shape: [200, 200, 3]
+    wrist_image_shape: [84, 84, 3]
+  variants:
+    a_only:
+      source_split: splitA
+      source_scene: A
+      dataset_root: topic2_act/data/xiaoma26_calvin_lerobot/splitA_episodes_A_full_canonical_v3
+      episodes_file: topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_A_full.json
+      prepared_dataset_root: topic2_act/data/xiaoma26_calvin_lerobot/splitA_episodes_A_full_canonical_v3
+      expected_episodes: 6089
+      expected_frames: 366693
+      run_name: act_calvin_a_only_full_150k
+      output_dir: topic2_act/outputs/act_calvin/a_only_full_150k
+    abc_joint:
+      source_split: splitA+splitB+splitC
+      source_scene: ABC
+      dataset_root: topic2_act/data/xiaoma26_calvin_lerobot/abc_joint_canonical_v3
+      episodes_file: topic2_act/data/splits/xiaoma26_calvin_lerobot/episodes_ABC_full.json
+      prepared_dataset_root: topic2_act/data/xiaoma26_calvin_lerobot/abc_joint_canonical_v3
+      expected_episodes: 17870
+      expected_frames: 1071743
+      run_name: act_calvin_abc_full_150k
+      output_dir: topic2_act/outputs/act_calvin/abc_full_150k
+
+policy:
+  type: act
+  lerobot_version: 0.4.0
+  inherit_act_config_defaults: true
+  defaults_dump: topic2_act/configs/act_default_v0.4.0.dump.txt
+  chunk_size: 100
+  n_action_steps: 100
+
+optimization:
+  optimizer: adamw
+  learning_rate: 1.0e-5
+  weight_decay: 1.0e-4
+  batch_size: 8
+  seed: 20260529
+  gradient_clip_norm: 10.0
+  steps: 150000
+
+dataloader:
+  num_workers: 16
+  prefetch_factor: 4
+  persistent_workers: true
+
+logging:
+  backend: wandb
+  project: hw3-topic2
+  log_freq: 100
+  save_freq: 50000
+  keep_last_numeric_checkpoints: 2
+  require_action_l1: true
+  action_l1_source: ACTPolicy.forward loss_dict['l1_loss']
+
+guards:
+  a_only_and_abc_strictly_share_steps: true
+  abc_requires_contiguous_remap: true
+  abc_expected_episode_count: 17870
+  abc_expected_frame_count: 1071743
+  abc_requires_split_coverage_sample: [splitA, splitB, splitC]
+  abc_requires_merged_normalization_stats: true
