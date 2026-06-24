@@ -21,319 +21,458 @@
 \title{HW3: Multi-Source 3D Asset Fusion and ACT Generalization on CALVIN}
 
 \author{%
-  Team HW3-DL-Spatial-Intelligence\\
-  Deep Learning and Spatial Intelligence\\
-  \href{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence}{Project repository}
+	Team HW3-DL-Spatial-Intelligence\\
+	Deep Learning and Spatial Intelligence\\
+	\href{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence}{Project repository}
 }
 
 \begin{document}
 
-\maketitle
+	\maketitle
 
-\begin{abstract}
-本报告完成课程作业 HW3 的两条主线：Topic 1 构建多来源 3D 资产并融合到真实背景场景，Topic 2 训练 ACT 策略并评估其在 CALVIN 未见环境中的泛化能力。Topic 1 以 Mip-NeRF 360 \texttt{counter} 场景为背景，分别使用真实多视角重建、DreamFusion text-to-3D 和 Stable Zero123 image-to-3D 生成 \texttt{object\_A}、object B hamburger 和 object C toy，再通过 Blender 统一坐标、尺度、材质和相机轨迹，输出 300 帧融合视频与关键帧。Topic 2 基于官方 CALVIN-LeRobot splits，在 splitA 上训练 A-only ACT，在 splitA/B/C 上训练 ABC ACT，并在未见 splitD 上计算 open-loop Action L1。结果显示，ABC 在 splitD normalized Action L1 上从 A-only 的 0.6586 降至 0.5780，相对降低 12.24\%，且 frame-level p95 误差降低 8.45\%。这些结果说明，多环境训练能提升跨环境动作预测鲁棒性；同时，Topic 1 的融合实验揭示了跨表示 3D 资产在纹理、尺度和渲染管线对齐上的工程挑战。
-\end{abstract}
+	\begin{center}
+		\small
+		\begin{tabularx}{0.96\linewidth}{@{}p{0.18\linewidth}X@{}}
+			\toprule
+			Team members & 张奕洋，25210980142，成员 A，负责 Topic 1 多来源 3D 生成、真实场景融合、Topic 1 资产与图表整理；张航瑞，25210980134，成员 B，负责 Topic 2 ACT/CALVIN 训练评测、泛化分析、报告整合与编译核验。 \\
+			GitHub repository & \href{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence}{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence} \\
+			Cloud artifacts & Baidu Netdisk: \href{https://pan.baidu.com/s/1WNUytEJB6iWO8gU2to5lOA?pwd=quw1}{https://pan.baidu.com/s/1WNUytEJB6iWO8gU2to5lOA?pwd=quw1}; extraction code: \textbf{quw1}. \\
+			\bottomrule
+		\end{tabularx}
+	\end{center}
+	\vspace{0.6em}
 
-\section{Introduction}
+	\begin{abstract}
+		本报告完成课程作业 HW3 的两条主线：Topic 1 构建多来源 3D 资产并融合到真实背景场景，Topic 2 训练 ACT 策略并评估其在 CALVIN 未见环境中的泛化能力。Topic 1 以 Mip-NeRF 360 counter 场景为背景，分别使用真实多视角重建、DreamFusion text-to-3D 和 Stable Zero123 image-to-3D 生成 object A、object B hamburger 和 object C toy，再通过 Blender 统一坐标、尺度、材质和相机轨迹，输出 300 帧融合视频与关键帧。Topic 2 基于官方 CALVIN-LeRobot splits，在 splitA 上训练 A-only ACT，在 splitA/B/C 上训练 ABC ACT，并在未见 splitD 上计算 open-loop Action L1。结果显示，ABC 在 splitD normalized Action L1 上从 A-only 的 0.6586 降至 0.5780，相对降低 12.24\%，且 frame-level p95 误差降低 8.45\%。这些结果说明，多环境训练能提升跨环境动作预测鲁棒性；同时，Topic 1 的融合实验揭示了跨表示 3D 资产在纹理、尺度和渲染管线对齐上的工程挑战。
+	\end{abstract}
 
-本作业围绕空间智能中的两个互补问题展开。Topic 1 关注 3D 内容生成与真实场景融合：给定真实背景、真实采集物体、文本提示物体和单图物体，目标是把来源、表示形式和质量特征各不相同的资产放入同一世界坐标系，并输出可复现的多视角融合视频。Topic 2 关注机器人模仿学习：在 CALVIN 桌面操作数据集上训练 Action Chunking Transformer (ACT)，并检验单环境训练与多环境训练在未见环境 D 上的泛化差异。
+	\section{Introduction}
 
-两条主线共享同一个工程准则：所有结论必须能追溯到明确的数据、脚本、日志和可复现文件。对于 3D 融合，资产来自 3D Gaussian Splatting (3DGS)、DreamFusion 和 Stable Zero123；这些方法的输入成本、几何一致性、纹理质量和导出形式各不相同。仅获得单个可视化结果并不足够，报告还需要说明如何把 Gaussian、mesh、texture 和 camera path 统一成一个可渲染场景。对于机器人学习，ACT 的效果会受到 dataset split、训练预算、动作归一化、chunk size、图像预处理和评测环境的共同影响。为避免不公平比较，A-only 与 ABC 模型使用相同结构、相同 150000 gradient steps、相同 batch size、相同 optimizer 和相同随机种子，主要差异限定为训练数据覆盖范围。
+	本作业围绕空间智能中的两个互补问题展开。Topic 1 关注 3D 内容生成与真实场景融合：给定真实背景、真实采集物体、文本提示物体和单图物体，目标是把来源、表示形式和质量特征各不相同的资产放入同一世界坐标系，并输出可复现的多视角融合视频。Topic 2 关注机器人模仿学习：在 CALVIN 桌面操作数据集上训练 Action Chunking Transformer (ACT)，并检验单环境训练与多环境训练在未见环境 D 上的泛化差异。
 
-本报告的交付物包括三类内容。第一，Topic 1 提供 \texttt{counter} 背景、\texttt{object\_A}、object B 和 object C 的图表证据，包含 render-vs-GT contact sheet、生成结果、导出纹理、counter orbit 帧与融合视频关键帧。第二，Topic 2 提供 A-only 与 ABC 的训练曲线、splitD Action L1 对比、per-chunk 误差曲线和 frame-level 误差分布。第三，仓库保存可复现实验入口、轻量结果 JSON/CSV/MD、报告图表和外部大文件 manifest；大体积 checkpoint、mesh、video 和 raw dataset 保持在 Git 外部。
+	两条主线共享同一个工程准则：所有结论必须能追溯到明确的数据、脚本、日志和可复现文件。对于 3D 融合，资产来自 3D Gaussian Splatting (3DGS)、DreamFusion 和 Stable Zero123；这些方法的输入成本、几何一致性、纹理质量和导出形式各不相同。仅获得单个可视化结果并不足够，报告还需要说明如何把 Gaussian、mesh、texture 和 camera path 统一成一个可渲染场景。对于机器人学习，ACT 的效果会受到 dataset split、训练预算、动作归一化、chunk size、图像预处理和评测环境的共同影响。为避免不公平比较，A-only 与 ABC 模型使用相同结构、相同 150000 gradient steps、相同 batch size、相同 optimizer 和相同随机种子，主要差异限定为训练数据覆盖范围。
 
-\clearpage
-\noindent
-\begin{minipage}[t]{0.48\linewidth}
-  \centering
-  \captionof{table}{Topic 1 3DGS reconstruction metrics.}
-  \label{tab:topic1-psnr}
-  \vspace{0.4em}
-  \small
-  \setlength{\tabcolsep}{3pt}
-  \begin{tabular}{lrrr}
-    \toprule
-    Asset & Iteration & Test PSNR & Train PSNR \\
-    \midrule
-    \texttt{counter} & 7000 & 27.3455 & 28.9319 \\
-    \texttt{counter} & 30000 & 29.2630 & 31.5692 \\
-    \texttt{object\_A} & 7000 & 31.1154 & 34.7399 \\
-    \texttt{object\_A} & 30000 & 31.3322 & 37.7307 \\
-    \bottomrule
-  \end{tabular}
-\end{minipage}
-\hfill
-\begin{minipage}[t]{0.48\linewidth}
-  \centering
-  \captionof{table}{Topic 2 CALVIN official split statistics.}
-  \label{tab:calvin-splits}
-  \vspace{0.4em}
-  \begin{tabular}{lcrr}
-    \toprule
-    Split & Scene & Episodes & Frames \\
-    \midrule
-    splitA & A & 6089 & 366693 \\
-    splitB & B & 6115 & 367096 \\
-    splitC & C & 5666 & 337954 \\
-    splitD & D & 5124 & 308918 \\
-    \bottomrule
-  \end{tabular}
-\end{minipage}
-\vspace{1.2em}
+	本报告的交付物包括三类内容。第一，Topic 1 提供 counter 背景、object A、object B 和 object C 的图表证据，包含 render-vs-GT contact sheet、生成结果、导出纹理、counter orbit 帧与融合视频关键帧。第二，Topic 2 提供 A-only 与 ABC 的训练曲线、splitD Action L1 对比、per-chunk 误差曲线和 frame-level 误差分布。第三，仓库保存可复现实验入口、轻量结果 JSON/CSV/MD、报告图表和外部大文件 manifest；大体积 checkpoint、mesh、video 和 raw dataset 保持在 Git 外部。
 
-\section{Related Work}
+	从课程目标看，Topic 1 更接近空间智能中的场景表示与资产对齐问题。单独训练出一个高质量 3DGS 背景，或单独生成一个可看的 text-to-3D 物体，都还没有解决作业要求中的 ``合并渲染''。真正困难的部分在于：背景、真实物体和生成式物体来自不同管线，输出格式、坐标习惯、尺度、材质和可编辑性均不同。报告因此把最终融合过程作为一个独立研究对象来分析，而不只把它当作渲染后处理步骤。我们关心的是每种表示在进入共享场景时损失了什么、保留了什么，以及这些损失如何反映在最终视频中。
 
-多视角重建为真实场景融合提供几何基础。COLMAP 估计相机位姿和稀疏/稠密几何\cite{schonberger2016sfm,schonberger2016mvs}，3D Gaussian Splatting 用可微 Gaussian 表示实现高质量新视角渲染\cite{kerbl2023gaussian}。文本或单图驱动的 3D 生成扩展了资产来源：DreamFusion 通过 score distillation 从文本优化 3D 表示\cite{poole2022dreamfusion}，Zero-1-to-3 / Stable Zero123 将单图新视角先验用于 image-to-3D 管线\cite{liu2023zero123,stability2023zero123,threestudio2023}。机器人部分基于 CALVIN 的跨环境桌面操作基准\cite{mees2022calvin} 与 ACT 的 action chunk 预测框架\cite{chi2023act}，并使用 LeRobot 的数据和训练接口组织可复现实验\cite{lerobot2024}。
+	Topic 2 则强调 offline imitation learning 在视觉环境变化下的泛化。A-only 与 ABC 的对比并非简单比较两个 checkpoint 的数值高低，而是检验训练分布覆盖范围对未见环境 D 的影响。由于 CALVIN 的 splitD 同时改变了背景外观、物体摆放和任务上下文，单环境模型即使在训练曲线上更低，也可能学到与 splitA 视觉布局绑定更紧的动作预测模式。这个视角使得训练 loss 和 splitD Action L1 的反向趋势具有解释价值：训练误差更低不一定代表跨环境行为更稳。
 
-\section{Datasets}
+	两条主线也有共同的方法论约束。Topic 1 中，视觉结果必须和具体导出文件、相机轨迹和关键帧对应；Topic 2 中，泛化结论必须和 split、episode 数、frame 数、metric space 和 checkpoint 对应。报告在写作上尽量把每个结论连接到可复查的表格、图像或 JSON 结果，避免用主观观感替代证据。这样处理也便于助教在复现失败或外部大文件暂不可用时，仍然能通过仓库中的轻量 artifact 判断实验路径和结论边界。
 
-\subsection{3D Fusion Assets}
+	\clearpage
+	\noindent
+	\begin{minipage}[t]{0.48\linewidth}
+		\centering
+		\captionof{table}{Topic 1 3DGS reconstruction metrics.}
+		\label{tab:topic1-psnr}
+		\vspace{0.4em}
+		\small
+		\setlength{\tabcolsep}{3pt}
+		\begin{tabular}{lrrr}
+			\toprule
+			Asset & Iteration & Test PSNR & Train PSNR \\
+			\midrule
+			counter & 7000 & 27.3455 & 28.9319 \\
+			counter & 30000 & 29.2630 & 31.5692 \\
+			object A & 7000 & 31.1154 & 34.7399 \\
+			object A & 30000 & 31.3322 & 37.7307 \\
+			\bottomrule
+		\end{tabular}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[t]{0.48\linewidth}
+		\centering
+		\captionof{table}{Topic 2 CALVIN official split statistics.}
+		\label{tab:calvin-splits}
+		\vspace{0.4em}
+		\begin{tabular}{lcrr}
+			\toprule
+			Split & Scene & Episodes & Frames \\
+			\midrule
+			splitA & A & 6089 & 366693 \\
+			splitB & B & 6115 & 367096 \\
+			splitC & C & 5666 & 337954 \\
+			splitD & D & 5124 & 308918 \\
+			\bottomrule
+		\end{tabular}
+	\end{minipage}
+	\vspace{1.2em}
 
-Topic 1 使用一个统一背景和三个前景资产输入。背景来自 Mip-NeRF 360 的 \texttt{counter} 场景。该场景是室内厨房台面环境，包含多视角 RGB 图像、COLMAP 相机位姿和稀疏几何，适合作为小型物体融合的统一背景。相比 \texttt{garden} 或 \texttt{bicycle} 等户外/大尺度场景，\texttt{counter} 的桌面尺度更适合放置玩具、汉堡和盆栽等前景资产。
+	\section{Related Work}
 
-\texttt{object\_A} 是真实多视角重建输入，来自手机环绕拍摄视频。我们从视频中抽取清晰帧，并将筛选后的图像作为 COLMAP 和 3DGS 的输入。该资产用于代表真实采集路线，因此保留了真实物体的外观、拍摄光照和不可避免的背景干扰。
+	多视角重建为真实场景融合提供几何基础。COLMAP 估计相机位姿和稀疏/稠密几何\cite{schonberger2016sfm,schonberger2016mvs}，使后续神经表示训练可以共享稳定的 camera model 和空间坐标。3D Gaussian Splatting 用可微 Gaussian 表示实现高质量新视角渲染\cite{kerbl2023gaussian}，优点是训练后渲染速度快、局部细节强，缺点是原生资产更接近点状/高斯集合，进入通用 DCC 工具时需要额外转换。对本作业而言，3DGS 提供了可度量的背景和真实物体重建质量，但最终融合仍要回答如何与 mesh 管线共同渲染。
 
-object B 是 text-to-3D 输入，文本 prompt 为 ``a hamburger''。选择该 prompt 的原因是主体语义明确、形状容易识别，并且与 \texttt{counter} 厨房台面背景语义一致。object C 是 single-image-to-3D 输入，来自一张手机照片。输入图像经过主体裁剪和透明背景处理，得到 RGBA 前景图，用于 Stable Zero123。
+	文本或单图驱动的 3D 生成扩展了资产来源。DreamFusion 通过 score distillation 从文本优化 3D 表示\cite{poole2022dreamfusion}，Zero-1-to-3 / Stable Zero123 将单图新视角先验用于 image-to-3D 管线\cite{liu2023zero123,stability2023zero123,threestudio2023}。这些方法降低了数据采集成本，但输出常带有生成式 3D 的典型问题：局部几何过平滑、纹理与真实光照不一致、背面细节由先验补全。报告中的 object B/C 正是用来体现这类方法的优点和限制：它们能快速得到可导入 Blender 的 textured mesh，同时也会在最终融合视频中暴露偏色、纹理拉伸和局部形状噪声。
 
-因此，Topic 1 的数据覆盖了三种互补来源：真实多视角图像、文本条件和单图条件。它们的输入成本和信息量不同，也对应后续实验中几何质量、纹理质量和融合难度的差异。
+	在机器人模仿学习部分，CALVIN 提供了跨环境桌面操作基准\cite{mees2022calvin}。环境 A/B/C/D 之间并非只改变背景图片，还会改变桌面布局、物体外观和视觉上下文，因此适合检验策略对视觉分布转移的稳健性。ACT 的 action chunk 预测框架\cite{chi2023act} 通过一次预测未来动作序列，降低逐步闭环查询的高频噪声，并使离线训练目标与 future action supervision 更直接对应。LeRobot 的数据和训练接口\cite{lerobot2024} 则提供了统一 schema、normalizer 和 checkpoint 格式，方便把训练与评测结果沉淀为可复查 artifact。
 
-\subsection{CALVIN Official Splits}
+	本报告将这些相关工作组织成两个具体问题。第一个问题是跨表示渲染：3DGS 在新视角质量上有优势，mesh 在通用渲染和资产编辑上更方便，二者需要通过相机轨迹、坐标系和材质管理连接。第二个问题是跨环境泛化：ACT 在训练集上的 loss 只能反映对当前数据分布的拟合，splitD open-loop Action L1 更能反映面对未见环境时动作预测是否稳定。后续方法与实验章节都围绕这两个问题展开。
 
-Topic 2 使用课程指定的官方 CALVIN-LeRobot 数据。表~\ref{tab:calvin-splits} 给出 splitA/B/C/D 的 episode 与 frame 统计：splitA 用于 A-only 训练，splitA/B/C 合并后用于 ABC 训练，splitD 作为未见环境评测集合。训练侧将 15 维状态、7 维动作、静态相机和腕部相机图像转换为 LeRobot canonical dataset；ABC 联合数据通过 manifest 记录来源 split、原始 episode、任务字符串和重映射索引。
+	\section{Datasets}
 
-\clearpage
-\noindent
-\begin{minipage}{\linewidth}
-  \centering
-  \begin{minipage}[t]{0.49\linewidth}
-    \centering
-    \includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{final_report/counter_30k_render_gt_contact_sheet.png}
-    \par\footnotesize \texttt{counter} 30k
-  \end{minipage}
-  \hfill
-  \begin{minipage}[t]{0.49\linewidth}
-    \centering
-    \includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{final_report/object_A_30k_render_gt_contact_sheet.png}
-    \par\footnotesize \texttt{object\_A} 30k
-  \end{minipage}
-  \captionof{figure}{Render-vs-GT contact sheets for the real background and real captured object.}
-  \label{fig:topic1-contact}
-\end{minipage}
-\vspace{1.2em}
+	\subsection{3D Fusion Assets}
 
-\section{Methods}
+	Topic 1 使用一个统一背景和三个前景资产输入。背景来自 Mip-NeRF 360 的 counter 场景。该场景是室内厨房台面环境，包含多视角 RGB 图像、COLMAP 相机位姿和稀疏几何，适合作为小型物体融合的统一背景。相比 \texttt{garden} 或 \texttt{bicycle} 等户外/大尺度场景，counter 的桌面尺度更适合放置玩具、汉堡和盆栽等前景资产。
 
-\subsection{Topic 1: Multi-Source 3D Asset Fusion}
+	object A 是真实多视角重建输入，来自手机环绕拍摄视频。我们从视频中抽取清晰帧，并将筛选后的图像作为 COLMAP 和 3DGS 的输入。该资产用于代表真实采集路线，因此保留了真实物体的外观、拍摄光照和不可避免的背景干扰。
 
-Topic 1 的方法目标不是把所有资产强行转换成同一种底层表示，而是把它们统一到同一 Blender 世界坐标系和同一相机轨迹下完成渲染。3DGS 负责真实背景和真实物体的新视角重建验证，DreamFusion 和 Stable Zero123 负责生成式前景资产，Blender 负责最终坐标对齐、材质检查和视频渲染。
+	object B 是 text-to-3D 输入，文本 prompt 为 ``a hamburger''。选择该 prompt 的原因是主体语义明确、形状容易识别，并且与 counter 厨房台面背景语义一致。object C 是 single-image-to-3D 输入，来自一张手机照片。输入图像经过主体裁剪和透明背景处理，得到 RGBA 前景图，用于 Stable Zero123。
 
-对于 \texttt{counter} 和 \texttt{object\_A}，我们先使用 COLMAP 相机位姿作为几何基础，并分别训练 7k smoke 和 30k full 3DGS 模型。3DGS 输出用于验证重建质量和记录 PSNR。由于最终融合需要和 object B/C 的 mesh 资产共同进入 Blender，我们进一步使用 COLMAP dense reconstruction、mesh reconstruction 和 texrecon 将 \texttt{counter} 与 \texttt{object\_A} 转换为 textured mesh。这个步骤把高斯/点云侧的真实重建结果转成 Blender 更容易管理的显式资产。
+	因此，Topic 1 的数据覆盖了三种互补来源：真实多视角图像、文本条件和单图条件。它们的输入成本和信息量不同，也对应后续实验中几何质量、纹理质量和融合难度的差异。
 
-对于 object B 和 object C，我们使用 threestudio 导出 mesh 资产。object B 采用 DreamFusion + Stable Diffusion 1.5，从 prompt ``a hamburger'' 优化得到 textured mesh；object C 采用 Stable Zero123，从 RGBA 单图条件生成 mesh，并导出 \texttt{obj}、\texttt{mtl} 和 diffuse texture。两条生成式路线都先通过可视化结果和导出文件验证链路，再进入最终融合。
+	counter 背景的选择还考虑了融合任务的语义合理性。厨房台面提供了明确的支撑平面和可观察尺度，适合放置 hamburger、toy 和真实采集物体；若选择户外大尺度场景，前景资产的尺度与地面接触关系会更难判断。counter 的 COLMAP 相机和 3DGS 输出同时提供了两类证据：一类是 render-vs-GT 指标，用于确认背景重建链路可靠；另一类是可采样的相机集合，用于生成最终 Blender orbit trajectory。这样，背景既是视觉内容，也是最终融合视频的坐标和相机基准。
 
-融合阶段以 \texttt{counter} 的世界坐标系为基准。我们从 \texttt{counter} 相机集合中采样 300 帧 orbit trajectory，并转换为 Blender camera animation。随后在 Blender 中导入 \texttt{counter} textured mesh、\texttt{object\_A} textured mesh、hamburger mesh 和 object C mesh，手动调整前景资产的 scale、rotation 和 translation，使其落在桌面区域并在多视角下保持空间一致。最终渲染输出 300 帧、30 fps、3114$\times$2076 的融合视频。Gaussian 表示保留为同轨迹双 pass 合成的备用路线，但最终主结果采用 textured mesh + Blender 渲染。
+	object A 的数据更能反映真实采集路线的实际成本。手机环绕视频带来了真实纹理和真实几何线索，但也带来了手持拍摄常见问题，例如模糊帧、背景混入、视角覆盖不均和光照变化。真实重建路线因此需要抽帧、筛选、COLMAP 注册、3DGS 训练、点云/mesh 清理和 texrecon 纹理化。报告保留 object A 的 train/test PSNR，是为了说明真实多视角重建虽有较高质量上限，但在稀疏视角下仍存在训练视角拟合更强的问题。
 
-\subsection{Topic 2: ACT/CALVIN Cross-Environment Generalization}
+	object B 和 object C 的数据成本更低。object B 只需要文本 prompt，能够体现 text-to-3D 的语义自由度；object C 只需要一张 RGBA 前景图，体现 single-image-to-3D 在数据采集成本上的优势。二者进入融合阶段时都以 textured mesh 形式出现，因此和 Blender 工具链兼容性较好。代价是其几何和纹理由生成先验补全，缺少真实多视角监督，局部细节稳定性和真实光照一致性弱于 object A。
 
-Topic 2 采用 ACT 作为模仿学习策略，以当前视觉观测和 15 维机器人状态预测未来 100 步、7 维动作 chunk。A-only 只使用 splitA，ABC 使用 splitA/B/C；两组训练共享 ACT 结构、ResNet18 ImageNet backbone、batch size、learning rate、weight decay、seed、DataLoader 配置和 150000 gradient steps。评测主指标为 splitD open-loop Action L1，脚本构造与训练一致的 future action chunk，并在 normalized action space 与 raw action units 中计算有效动作元素的平均 L1。CALVIN closed-loop 受 strict NVIDIA EGL 图形栈限制，报告把 \texttt{direct-cameras} smoke 作为辅助证据，并以全量 splitD open-loop 指标承载主要结论。
+	\subsection{CALVIN Official Splits}
 
-\clearpage
-\noindent
-\begin{minipage}{\linewidth}
-  \centering
-  \begin{minipage}[t]{0.24\linewidth}
-    \centering
-    \includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/hamburger_it10000_validation.png}
-    \par\footnotesize object B validation
-  \end{minipage}
-  \hfill
-  \begin{minipage}[t]{0.24\linewidth}
-    \centering
-    \includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/hamburger_texture_kd.jpg}
-    \par\footnotesize object B texture
-  \end{minipage}
-  \hfill
-  \begin{minipage}[t]{0.24\linewidth}
-    \centering
-    \includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/objectC_training_strip.png}
-    \par\footnotesize object C strip
-  \end{minipage}
-  \hfill
-  \begin{minipage}[t]{0.24\linewidth}
-    \centering
-    \includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/objectC_texture_kd.jpg}
-    \par\footnotesize object C texture
-  \end{minipage}
-  \captionof{figure}{Generated Topic 1 assets used in the final fusion scene.}
-  \label{fig:topic1-generated-assets}
-\end{minipage}
-\vspace{1.2em}
+	Topic 2 使用课程指定的官方 CALVIN-LeRobot 数据。表~\ref{tab:calvin-splits} 给出 splitA/B/C/D 的 episode 与 frame 统计：splitA 用于 A-only 训练，splitA/B/C 合并后用于 ABC 训练，splitD 作为未见环境评测集合。训练侧将 15 维状态、7 维动作、静态相机和腕部相机图像转换为 LeRobot canonical dataset；ABC 联合数据通过 manifest 记录来源 split、原始 episode、任务字符串和重映射索引。
 
-\section{Experiments}
+	正式比较使用 splitD 作为 zero-shot evaluation set。这样划分的含义是：A-only 只见过 splitA 的环境，ABC 见过 splitA/B/C 的环境，但两者都没有把 D 用于训练。由于 splitD 包含 5124 episodes 和 308918 frames，open-loop 评测能够覆盖足够多的任务片段和动作元素，避免结论被少数短 episode 主导。报告中同时记录 normalized Action L1 和 raw Action L1，前者便于和训练 normalizer 对齐，后者便于理解动作单位下的实际误差。
 
-\subsection{Topic 1: 3D Reconstruction, Generation, and Fusion}
+	ABC 数据构建的关键是统一 episode index 和 task namespace。splitA、splitB、splitC 原始数据各自从局部 episode index 开始，直接拼接会造成索引冲突。项目构建 joint canonical dataset 时把 episode 重映射到连续区间，并用 manifest 保存来源 split、原始 episode、task string 和 canonical task index。这个处理保证训练脚本看到的是一个一致的数据集，同时仍能追溯每条 episode 的原始来源。对于泛化实验，这一点很重要，因为我们希望 A-only 与 ABC 的差异来自环境覆盖范围，避免 schema 不一致或 task mapping 错误引入虚假差异。
 
-Topic 1 的实验分为三组：真实重建质量验证、生成式资产导出验证，以及最终融合渲染验证。第一组实验评估 \texttt{counter} 背景和 \texttt{object\_A} 的 3DGS 重建质量。与 7k smoke run 相比，\texttt{counter} 的 30k test PSNR 从 27.3455 提升到 29.2630，说明完整训练明显改善了背景的新视角渲染质量。\texttt{object\_A} 的 test PSNR 从 31.1154 小幅提升到 31.3322，表明真实物体在 7k 时已经基本收敛，但 30k 版本在 train PSNR 上继续提升，因此仍采用 30k 作为最终重建结果。图~\ref{fig:topic1-contact} 给出两者的 render-vs-GT contact sheet，说明真实背景和真实采集物体均达到可用于后续融合的重建质量。
+	CALVIN 的 closed-loop benchmark 依赖仿真器、相机渲染、PyBullet/EGL 和策略推理的同步链路。服务器 strict EGL 路线受系统图形栈限制，因此本报告不把正式 closed-loop success rate 当作主指标。open-loop Action L1 的优势在于它直接读取离线 splitD 数据，固定使用同一 checkpoint、preprocessor 和 normalizer 做前向推理，避免图形栈状态影响主要结论。direct-cameras smoke 只用于说明桥接链路能输出动作并推动 TCP 变化。
 
-第二组实验验证生成式资产能否导出为 Blender 可用的 textured mesh。object B hamburger 使用 DreamFusion + Stable Diffusion 1.5，先完成 100-step smoke run 验证链路，再完成 10000-step full run 并导出 \texttt{obj+mtl+texture}。我们没有继续更换 prompt，因为 hamburger 已有完整 10000-step export，且语义上适合 \texttt{counter} 厨房台面。object C toy 使用 Stable Zero123，保留 600、3000 与 10000 iterations 对照；600-step 版本主要用于验证训练链路，3000-step 版本形状和纹理较稳定且具备完整 mesh/material/texture 导出包，10000-step 版本虽然训练更长，但未获得更清晰的可用 export，因此最终采用 3000-step 作为融合版本。生成式资产的验证图和导出纹理见图~\ref{fig:topic1-generated-assets}。
+	从数据组织角度看，CALVIN split 的价值在于它提供了可控的环境变化。splitA/B/C/D 的任务语义相近，但视觉背景、桌面布局和物体实例存在差异；这使 A-only 与 ABC 对比能够聚焦在环境覆盖范围上。若只在同一环境内划分 train/test，模型可能主要学习到固定相机视角下的局部视觉线索，难以暴露跨环境迁移问题。将 splitD 完全留作未见环境，可以更直接检验策略是否在状态、图像和动作之间学到可迁移关系。
 
-\begin{table}[H]
-  \centering
-  \caption{Topic 1 three-way asset generation comparison.}
-  \label{tab:topic1-three-way}
-  \scriptsize
-  \setlength{\tabcolsep}{2.5pt}
-  \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.12\linewidth}>{\raggedright\arraybackslash}p{0.11\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.15\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.12\linewidth}}
-      \toprule
-      Route & Asset & Geometry accuracy & Texture detail & Time / cost & Failure limits & Final form \\
-      \midrule
-      Real multi-view reconstruction & \texttt{object\_A} & Best physical consistency from real captured views; 30k test PSNR 31.3322. & Good under observed views; mesh texture depends on foreground cleanup and view coverage. & Highest manual cost: phone capture, frame extraction, COLMAP, 3DGS, dense meshing, texrecon. & Early point cloud/mesh contained background clutter; cleanup was required before texturing. & 3DGS point cloud + textured mesh. \\
-      Text-to-3D & object B hamburger & Recognizable global hamburger shape after DreamFusion 10000 iterations; local geometry can be soft. & Plausible generated texture exported with mesh; photo consistency is limited by SDS optimization. & No capture data; one 100-step smoke plus one 10000-step full run. & Prompt/seed sensitivity, SDS blur, and local artifacts can remain after export. & 10000-step textured mesh. \\
-      Single-image-to-3D & object C toy & Captures the main silhouette from one RGBA image; 3000 iterations selected for final placement. & Usable exported texture; quality depends strongly on crop, alpha matte, and input view prior. & Lowest data cost: image crop, alpha matte, Stable Zero123 training, mesh export. & 10000 iterations did not clearly improve visual quality, and no final mesh export was found for that run. & 3000-step textured mesh. \\
-      \bottomrule
-  \end{tabularx}
-\end{table}
+	数据集转换时还需要保持动作定义一致。CALVIN 原始数据与 LeRobot canonical 数据在字段命名、episode 存储、图像尺寸和动作归一化接口上存在差别。项目在转换后保留原始 split 来源、episode 数、frame 数和 task string，并在训练与评测中复用同一 normalizer。这样处理可以降低两个风险：一是 A-only 与 ABC 因 preprocessing 不一致产生虚假差异；二是 open-loop 评测在 raw action 与 normalized action 之间无法互相解释。报告同时列出两种 metric space，正是为了证明结论不依赖单一归一化坐标。
 
-表~\ref{tab:topic1-three-way} 从几何真实性、纹理质量、人工成本和失败模式四个维度比较三类前景资产。真实多视角重建不是简单地 ``最好''，而是质量上限高但数据清理和 mesh 纹理化成本最高；text-to-3D 的语义自由度最高，但几何和局部纹理更依赖 prompt、seed 与 SDS 优化稳定性；single-image-to-3D 的采集成本最低，但最依赖输入抠图质量和单图视角先验。这个对比说明三条路线是互补关系：它们提供的信息来源不同，也在最终融合中暴露出不同类型的视觉误差。
+	对于 ABC 数据，splitA/B/C 的联合训练还会改变 mini-batch 组成。相同 batch size 与相同 step 数意味着 ABC 在每个 epoch 概念下覆盖的环境更广，但对任一单独环境的重复次数更少。这个设定更贴近课程中的泛化问题：我们关心的并非在 splitA 上把监督损失压到最低，而是有限训练预算下，增加环境多样性是否能够换来更稳的 splitD 动作预测。因此 Datasets 部分必须记录 episode/frame 规模，并在 Methods 与 Experiments 中继续说明公平性边界。
 
-第三组实验验证最终融合视频。完整视频为 300 帧、30 fps、10 秒、3114$\times$2076 分辨率。图~\ref{fig:topic1-orbit} 展示 \texttt{counter} orbit camera path 的 Blender 验证帧，说明相机动画可以沿共享轨迹观察背景；图~\ref{fig:topic1-fusion-keyframes} 展示最终融合视频的三张代表性关键帧。关键帧中可以同时看到 \texttt{counter} 背景、真实重建物体 A、DreamFusion hamburger 和 Stable Zero123 toy，并且三类前景资产在相机环绕过程中保持相对空间关系稳定。这说明四类资产已经被成功放入同一 Blender 世界坐标系下。最终视频仍保留一些可见局限，例如 \texttt{counter} mesh 的局部空洞/floater、暗部贴图不均匀，以及生成式 mesh 的局部纹理噪声；这些现象在 Discussion 中作为融合质量限制分析。
+	最后，splitD 的规模使它适合作为主评测集合。5124 episodes 与 308918 frames 覆盖了大量任务片段，per-frame、per-chunk 与 raw/normalized 统计都能在同一结果文件中复核。相比少量 closed-loop smoke，open-loop 结果更适合做 A-only 与 ABC 的稳定比较；相比只看训练曲线，splitD 结果更能反映未见环境的分布偏移。后文所有 Topic 2 结论都围绕这一数据划分展开。
 
-\begin{figure}[H]
-  \centering
-  \begin{subfigure}[t]{0.48\linewidth}
-    \centering
-    \includegraphics[width=0.48\linewidth,height=0.12\textheight,keepaspectratio]{final_report/counter_orbit_frame_0000.png}
-    \includegraphics[width=0.48\linewidth,height=0.12\textheight,keepaspectratio]{final_report/counter_orbit_frame_0075.png}
-    \caption{Counter orbit camera validation.}
-    \label{fig:topic1-orbit}
-  \end{subfigure}
-  \hfill
-  \begin{subfigure}[t]{0.48\linewidth}
-    \centering
-    \includegraphics[width=0.32\linewidth,height=0.085\textheight,keepaspectratio]{final_report/fusion_frame_0075.png}
-    \includegraphics[width=0.32\linewidth,height=0.085\textheight,keepaspectratio]{final_report/fusion_frame_0150.png}
-    \includegraphics[width=0.32\linewidth,height=0.085\textheight,keepaspectratio]{final_report/fusion_frame_0225.png}
-    \caption{Selected final fusion keyframes.}
-    \label{fig:topic1-fusion-keyframes}
-  \end{subfigure}
-  \caption{Camera trajectory verification and final Topic 1 fusion video evidence.}
-\end{figure}
-\FloatBarrier
-\noindent
-\begin{minipage}{\linewidth}
-  \centering
-  \captionof{table}{Topic 2 ACT architecture, data, and training hyperparameters.}
-  \label{tab:topic2-hyperparams}
-  \vspace{0.3em}
-  \scriptsize
-  \resizebox{\linewidth}{!}{%
-    \begin{tabular}{llll}
-      \toprule
-      Group & Setting & Value & Source \\
-      \midrule
-      Model & Policy / backbone & ACT / ResNet18 ImageNet & Config + ACT dump \\
-      Transformer & Dim / heads / layers & 512 / 8 / encoder 4, decoder 1 & ACT dump \\
-      VAE and loss & Latent / KL / dropout & 32 / 10.0 / 0.1 & ACT dump \\
-      Observations & State / action dims & 15 / 7 & Training config \\
-      Images & Static / wrist shapes & $200{\times}200{\times}3$ / $84{\times}84{\times}3$ & Training config \\
-      Chunking & \texttt{chunk\_size} / \texttt{n\_action\_steps} & 100 / 100 & Training config \\
-      A-only data & Episodes / frames & 6089 / 366693 & A-only manifest \\
-      ABC data & Episodes / frames & 17870 / 1071743 & ABC manifest \\
-      Optimizer & Type / lr / weight decay & AdamW / $10^{-5}$ / $10^{-4}$ & Training config \\
-      Budget & Batch / steps / seed & 8 / 150000 / 20260529 & Config + manifests \\
-      Runtime & Observed s/step & A-only 0.106493 / ABC 0.106954 & Run manifests \\
-      Loader & Workers / prefetch / persistent & 16 / 4 / true & Run manifests \\
-      Logging & WandB runs & cnfwf30s / eysfzlqn & Run manifests \\
-      \bottomrule
-    \end{tabular}%
-  }
-\end{minipage}
+	数据部分还承担一个报告层面的作用：把后续实验的证据范围限定清楚。Topic 1 的真实资产和生成资产没有完全相同的监督信号，因此不能用单一 PSNR 对所有物体排序；Topic 2 的训练与评测数据则有明确 split 边界，因此可以做更严格的数值比较。前者需要在图像、导出文件和融合视频之间建立证据链，后者需要在 manifest、checkpoint、normalizer 和 result JSON 之间建立证据链。两种任务的指标形式不同，但都要求结果能够追溯到具体数据来源。
 
-\vspace{1.0em}
-\noindent
-\begin{minipage}{\linewidth}
-  \centering
-  \captionof{table}{A-only vs ABC on environment D open-loop Action L1. Lower is better.}
-  \label{tab:topic2-d-l1}
-  \vspace{0.3em}
-  \scriptsize
-  \resizebox{\linewidth}{!}{%
-    \begin{tabular}{llrrrrll}
-      \toprule
-      Model & Training data & Steps & D norm. L1 & D raw L1 & Frame p95 & Closed-loop & Source result \\
-      \midrule
-      A-only & splitA & 150000 & 0.658629 & 0.193360 & 1.062686 & Smoke only & Day6 A-only distribution \\
-      ABC & splitA+splitB+splitC & 150000 & 0.577993 & 0.168696 & 0.972841 & Smoke only & Day6 ABC distribution \\
-      ABC rel. reduction & vs A-only & -- & 12.24\% & 12.76\% & 8.45\% & -- & Day6 robustness summary \\
-      \bottomrule
-    \end{tabular}%
-  }
-\end{minipage}
-\vspace{1.2em}
+	在写作中保留这些数据细节，是为了避免把后续现象解释成孤立的模型表现。object A 的 train/test PSNR 差距与采集视角和前景清理有关；ABC 在训练集上的 loss 更高与多环境数据混合有关；splitD 上 ABC 更优则与未见环境覆盖需求有关。只有先说明数据如何产生、如何转换、如何被评测脚本读取，后文关于融合局限和泛化能力的讨论才有清晰上下文。
 
-\subsection{Topic 2: ACT Training and CALVIN Rollout}
+	因此，Datasets 小节并非简单列出输入文件。它将 Topic 1 的资产异质性与 Topic 2 的 split 设计并列呈现，说明本报告为什么需要同时使用定性图像证据和定量 Action L1 证据。对于空间智能作业，这种数据层面的说明也很关键：场景表示融合关注几何、材质和相机坐标，机器人泛化关注环境覆盖、动作定义和 episode 统计，二者都直接影响最终结论的可信度。
 
-Topic 2 的正式比较使用相同 ACT 结构和相同 150000 gradient steps。A-only 使用 splitA 训练，ABC 使用 splitA/B/C 训练；两者共享网络结构、优化器、随机种子、动作分块长度和 DataLoader 配置，完整超参见表~\ref{tab:topic2-hyperparams}。A-only 与 ABC 的正式训练 manifest 均为 \texttt{status=completed}，observed wall-clock speed 分别为 0.106493 s/step 和 0.106954 s/step，因此报告按约 0.106--0.107 s/step 记录训练耗时。A-only 最终训练 action L1 为 0.0813，ABC 最终训练 action L1 为 0.1567；该数值用于说明训练收敛状态，最终泛化结论以 splitD 离线评测为准。
+	这种写法也为后续局限性分析预留了证据入口。若融合视频出现偏色或 floater，可以回到资产采集、mesh 化和纹理重建环节定位；若 ACT 在 splitD 上误差升高，可以回到 split 覆盖、chunk mask 和 normalizer 检查。数据说明越具体，Discussion 中的限制分析越能落到可修复的工程环节上。
 
-环境 D zero-shot 主指标采用 open-loop Action L1。评测脚本覆盖 5124 条 episode 和 308918 帧，构造与 ACT 训练一致的 100 步 future action chunk，并在有效动作元素上计算平均 L1。表~\ref{tab:topic2-d-l1} 给出完整比较。ABC 在 normalized action space 中从 0.6586 降至 0.5780，相对降低 12.24\%；raw action units 从 0.1934 降至 0.1687，相对降低 12.76\%。正式 closed-loop benchmark 受 strict NVIDIA EGL 图形栈限制，因此表中 closed-loop 栏记录为 smoke evidence；direct-cameras smoke 显示两条策略链路均能输出 7 维动作并推动 TCP 移动，其中 A-only 为 60 steps、max TCP delta 0.264235，ABC 为 60 steps、max TCP delta 0.135650。
+	\clearpage
+	\noindent
+	\begin{minipage}{\linewidth}
+		\centering
+		\begin{minipage}[t]{0.49\linewidth}
+			\centering
+			\includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{final_report/counter_30k_render_gt_contact_sheet.png}
+			\par\footnotesize counter 30k
+		\end{minipage}
+		\hfill
+		\begin{minipage}[t]{0.49\linewidth}
+			\centering
+			\includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{final_report/object_A_30k_render_gt_contact_sheet.png}
+			\par\footnotesize object A 30k
+		\end{minipage}
+		\captionof{figure}{Render-vs-GT contact sheets for the real background and real captured object.}
+		\label{fig:topic1-contact}
+	\end{minipage}
+	\vspace{1.2em}
 
-\FloatBarrier
-\vspace{0.4em}
-\noindent
-\begin{minipage}[t]{0.49\linewidth}
-  \centering
-  \includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_train_action_l1_curve.png}
-  \captionof{figure}{Training action L1 curves for the comparable-budget A-only and ABC ACT runs.}
-  \label{fig:topic2-train-action-l1}
-\end{minipage}
-\hfill
-\begin{minipage}[t]{0.49\linewidth}
-  \centering
-  \includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_splitD_action_l1_bar.png}
-  \captionof{figure}{Environment D open-loop Action L1 comparison in normalized and raw action spaces.}
-  \label{fig:topic2-splitd-bar}
-\end{minipage}
-\vspace{0.6em}
+	\section{Methods}
 
-图~\ref{fig:topic2-train-action-l1} 给出两条 comparable-budget run 的训练 action L1 曲线；图~\ref{fig:topic2-splitd-bar} 展示 splitD normalized/raw Action L1 的主对比。两条训练曲线来自 A-only/ABC run manifests 和训练日志，splitD 柱状图来自 Day5/Day6 open-loop evaluation results。训练损失用于判断优化过程，跨环境结论以 splitD 全量 open-loop Action L1 为准。
+	\subsection{Topic 1: Multi-Source 3D Asset Fusion}
 
-\FloatBarrier
-\vspace{0.4em}
-\noindent
-\begin{minipage}[t]{0.49\linewidth}
-  \centering
-  \includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_splitD_per_chunk_l1.png}
-  \captionof{figure}{splitD normalized Action L1 by ACT chunk offset.}
-  \label{fig:topic2-per-chunk}
-\end{minipage}
-\hfill
-\begin{minipage}[t]{0.49\linewidth}
-  \centering
-  \includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_splitD_error_distribution.png}
-  \captionof{figure}{splitD per-frame action-chunk mean L1 distribution for A-only and ABC.}
-  \label{fig:topic2-error-distribution}
-\end{minipage}
-\vspace{0.6em}
+	Topic 1 的方法目标是避免强行抹平底层表示差异，同时把所有资产统一到同一 Blender 世界坐标系和同一相机轨迹下完成渲染。3DGS 负责真实背景和真实物体的新视角重建验证，DreamFusion 和 Stable Zero123 负责生成式前景资产，Blender 负责最终坐标对齐、材质检查和视频渲染。
 
-图~\ref{fig:topic2-per-chunk} 展示 chunk 内不同 future-action offset 的误差变化。A-only 的 normalized L1 从前 10 个 offset 的 0.6023 上升到 offset 25--34 的 0.6955，再上升到 offset 55--64 的 0.8246；ABC 的对应数值为 0.5192、0.6236 和 0.7095。最末有效 offset 64 上，A-only 为 0.8331，ABC 为 0.7357。ABC 在所有有效 offset 上保持更低误差，说明额外 B/C 视觉布局提升了环境 D 视觉偏移下的动作预测鲁棒性。offset 统计来自 Day6 robustness summary。
+	对于 counter 和 object A，我们先使用 COLMAP 相机位姿作为几何基础，并分别训练 7k smoke 和 30k full 3DGS 模型。3DGS 输出用于验证重建质量和记录 PSNR。由于最终融合需要和 object B/C 的 mesh 资产共同进入 Blender，我们进一步使用 COLMAP dense reconstruction、mesh reconstruction 和 texrecon 将 counter 与 object A 转换为 textured mesh。这个步骤把高斯/点云侧的真实重建结果转成 Blender 更容易管理的显式资产。
 
-帧级误差分布进一步支持上述结论。图~\ref{fig:topic2-error-distribution} 比较 splitD 每帧有效 action chunk mean L1 的分布；两组评测的分布计数都等于 308918 帧。A-only 的帧级 median / p75 / p95 分别为 0.6132 / 0.7888 / 1.0627，ABC 为 0.5211 / 0.7004 / 0.9728；p95 相对降低 8.45\%。结构化统计来自 Day6 robustness JSON/CSV/MD summaries。
+	对于 object B 和 object C，我们使用 threestudio 导出 mesh 资产。object B 采用 DreamFusion + Stable Diffusion 1.5，从 prompt ``a hamburger'' 优化得到 textured mesh；object C 采用 Stable Zero123，从 RGBA 单图条件生成 mesh，并导出 \texttt{obj}、\texttt{mtl} 和 diffuse texture。两条生成式路线都先通过可视化结果和导出文件验证链路，再进入最终融合。
 
-\FloatBarrier
+	融合阶段以 counter 的世界坐标系为基准。我们从 counter 相机集合中采样 300 帧 orbit trajectory，并转换为 Blender camera animation。随后在 Blender 中导入 counter textured mesh、object A textured mesh、hamburger mesh 和 object C mesh，手动调整前景资产的 scale、rotation 和 translation，使其落在桌面区域并在多视角下保持空间一致。最终渲染输出 300 帧、30 fps、3114$\times$2076 的融合视频。
 
-\section{Discussion}
+	这套流程实际包含两个层面的统一。第一层是几何统一：所有资产都需要落到同一世界坐标系，并在同一相机轨迹下被观察。counter 提供背景坐标和相机轨迹，object A/B/C 通过手动 scale、rotation 和 translation 完成桌面放置。第二层是渲染统一：3DGS 原生渲染器、COLMAP/texrecon mesh、threestudio mesh 和 Blender 材质系统具有不同假设，因此最终统一到 Blender render pass 中输出视频。这个设计降低了最终交付复杂度，也让关键帧和视频都能在同一个工具中复查。
 
-Topic 1 的结果表明，多来源 3D 资产融合的主要难点集中在表示转换与视觉一致性。真实多视角路线在 PSNR 与物理一致性上更可靠，但从 Gaussian 到 Blender mesh 的转换会引入清理和纹理重建工作；DreamFusion 能快速生成语义明确的物体，但局部几何和纹理稳定性受 prompt、seed 与 SDS 优化影响；Stable Zero123 的采集成本最低，但对输入 crop、alpha matte 和单图视角先验敏感。最终融合视频已经展示了同一相机轨迹下的空间对齐，同时也保留了背景 floater、局部暗部和生成式 mesh 纹理噪声等局限，这些局限应作为三种 3D 资产路线比较的一部分。
+	相机轨迹转换是方法中的关键细节。3DGS 的 camera representation 与 Blender 的 camera basis convention 不完全一致，项目通过脚本将 \texttt{cameras.json} 或 sampled trajectory 转成 Blender 可读 JSON，并在导入时生成 animated camera 与 trajectory curve。这样做的好处是最终融合视频沿着可复现的 \texttt{counter} orbit path 运动，避免临时在 Blender 中手动创建相机带来不可追溯的视角偏差。由于所有前景资产都在同一 camera trajectory 下接受检验，关键帧之间的相对空间关系能作为融合成功与否的直接证据。
 
-Topic 2 的核心现象是训练损失与跨环境泛化并不完全一致。A-only 的最终训练 action L1 低于 ABC，说明单环境训练更容易拟合 splitA 分布；在未见 splitD 上，ABC 的 open-loop Action L1、raw L1、chunk-offset L1 和 frame-level p95 均优于 A-only，说明额外环境覆盖提升了视觉布局变化下的动作预测鲁棒性。比较公平性来自固定训练步数、固定模型结构和固定优化配置。strict EGL 的系统限制使 closed-loop success rate 无法作为主指标；全量 splitD open-loop Action L1 不依赖仿真图形栈，覆盖全部 5124 episodes，因此是本阶段更稳定的主结论依据。
+	对于仍保留高斯或点云特征更强的资产，方法上保留两种选择。若追求 Blender 内统一管理，则进行 mesh 化、清理和纹理化；若追求保留 3DGS 原生新视角质量，则可采用同轨迹双 pass 合成。正式结果选择 textured mesh 主路线，是因为课程交付需要一个清晰的合并渲染视频，并且 B/C 已经是 mesh 资产。报告在 Discussion 中保留双 pass 作为替代路线，说明当前方案的取舍和后续改进方向。
 
-\section{Conclusion}
+	\subsection{Topic 2: ACT/CALVIN Cross-Environment Generalization}
 
-本阶段完成了 Week4 Day2 的 Experiments 主体收口。Topic 1 已写入 \texttt{counter}/\texttt{object\_A} 7k/30k PSNR、DreamFusion 10000-step object B、Stable Zero123 3000-step object C、三方式对比表和融合视频关键帧；Topic 2 已写入 150k 同步训练设置、0.106--0.107 s/step manifest 耗时、splitD Action L1、chunk-offset 鲁棒性、frame-level p95 和 EGL/direct-cameras 评测边界。当前证据支持两个结论：多来源 3D 融合已经形成可复现工程闭环，但视觉质量受表示转换和生成式资产质量限制；ACT 的多环境 ABC 训练在未见环境 D 上显著优于 A-only，normalized Action L1 相对降低 12.24\%。后续收尾应集中在 README、云盘权重链接、最终 PDF 编译核对和端到端复现记录。
+	Topic 2 采用 ACT 作为模仿学习策略，以当前视觉观测和 15 维机器人状态预测未来 100 步、7 维动作 chunk。A-only 只使用 splitA，ABC 使用 splitA/B/C；两组训练共享 ACT 结构、ResNet18 ImageNet backbone、batch size、learning rate、weight decay、seed、DataLoader 配置和 150000 gradient steps。评测主指标为 splitD open-loop Action L1，脚本构造与训练一致的 future action chunk，并在 normalized action space 与 raw action units 中计算有效动作元素的平均 L1。CALVIN closed-loop 受 strict NVIDIA EGL 图形栈限制，报告把 \texttt{direct-cameras} smoke 作为辅助证据，并以全量 splitD open-loop 指标承载主要结论。
 
-\nocite{*}
-\FloatBarrier
-\bibliographystyle{plainnat}
-\bibliography{reports/references}
+	ACT 的输入由视觉观测和机器人状态共同组成。静态相机图像提供桌面全局布局，腕部相机图像提供末端附近的局部线索，15 维状态提供机械臂当前位姿和夹爪状态。输出的 7 维动作表示相对末端运动与夹爪命令。由于策略一次预测 100 步 future action chunk，训练和评测都需要处理 episode 末尾 padding，评测脚本只在有效动作元素上计算 L1。这个细节保证短 episode 尾部不会人为降低或抬高误差。
 
-\end{document}
+	公平比较的核心是控制训练预算和模型结构。A-only 与 ABC 使用同一配置文件、同一 ACT 默认结构、同一 optimizer、同一随机种子和同一 150000 steps。ABC 数据量更大，因此一个训练 step 看到的是更宽的环境分布，模型优势不来自更多总步数。报告把最终训练 action L1 与 splitD Action L1 分开解释：训练 loss 反映拟合训练分布的难度，splitD open-loop L1 反映未见环境下动作预测的可迁移性。
+
+	open-loop 评测与 closed-loop smoke 的角色也需要分清。open-loop 评测不执行环境反馈，只比较同一观测下预测 action chunk 与数据集 action 的差异，因此它稳定、全量、可重复。direct-cameras smoke 通过仿真环境返回低成本相机观测，用来确认 worker、bridge、normalizer、policy 和 action shape 可以串起来。它能证明链路可用，但样本数和图形条件不足以替代全量 splitD 指标。
+
+	双环境桥接也影响方法设计。训练侧使用 LeRobot 当前环境，评测侧 CALVIN 依赖较旧的 Python 和仿真依赖，因此项目把二者拆成 worker/driver 结构：driver 负责 CALVIN episode、观测和 task context，worker 负责图像预处理、normalization、ACT forward 和 action queue。跨进程边界只传递 JSON 友好的 Python list、float 和 dict，避免跨 Python/NumPy 版本 pickle 造成兼容风险。这个设计使 open-loop 评测和 direct-cameras smoke 可以复用同一 policy wrapper，减少训练/评测预处理不一致。
+
+	评测脚本还显式记录 metric space、episode count、frame count、missing parquet count、normalizer 是否加载，以及 per-chunk/per-dimension 统计。这样做的原因是 Action L1 很容易因为数据范围或 mask 逻辑不同而不可比。例如 episode 末尾的 padded future action 必须被排除，splitD 的缺失 parquet 必须为 0，raw action metrics 必须确认 normalizer 可逆。报告中的 A-only/ABC 对比只采用这些字段全部满足要求的结果文件。
+
+	因此，Topic 2 方法的重点不只是训练一个 ACT checkpoint，还包括建立可审计的离线评测协议。A-only 与 ABC 的主结论来自同一脚本、同一 splitD 数据、同一 chunk 构造和同一统计口径；direct-cameras smoke 则独立检查策略能否在 CALVIN driver 中形成有效动作。这种分层证据结构能够在 strict EGL 受限时保留主要比较的可信度，同时清楚说明 closed-loop success rate 尚未作为正式主指标。
+
+	在实现层面，open-loop 脚本按 episode 顺序读取 parquet 数据，并对每一帧构造当前观测与未来 action chunk。若当前帧距离 episode 结尾不足 100 步，脚本会生成 padding mask，只统计真实存在的动作元素。这个设计与 ACT 训练时的 chunk 监督保持一致，避免短序列尾部被大量填充值稀释。结果文件中记录 valid element count、frame count 和 missing parquet count，使评测是否完整可以通过 JSON 字段直接核验。
+
+	动作归一化也需要在方法中写清。训练时模型学习的是 normalized action，推理后可通过保存的 normalizer 还原到 raw action units。报告中的 normalized L1 便于和训练 loss 对齐，raw L1 便于观察物理动作尺度下的差异。若两者趋势一致，说明 A-only/ABC 的比较并非由 normalizer 尺度造成；若两者趋势冲突，则需要重新检查数据统计和 inverse transform。因此正式结果表同时保留 normalized、raw 和 frame p95。
+
+	closed-loop smoke 的定位更加保守。direct-cameras 路线绕过 strict EGL 的高质量离屏渲染要求，使用可用的低成本相机观测检查策略是否能在 driver 中形成动作队列。该 smoke 能发现形状错误、normalizer 丢失、动作维度不匹配和 TCP 不动等工程问题，但它的图形条件、episode 数和任务覆盖都不足以支撑成功率结论。报告把它放在辅助证据位置，是为了让主结论只依赖稳定可重复的全量 open-loop 结果。
+
+	这种评测设计也使失败边界更清楚。若 open-loop L1 没有改善，说明多环境训练在离线动作预测上缺少证据；若 smoke 失败而 open-loop 正常，则优先排查 worker/driver、相机观测和仿真图形栈；若 smoke 正常而 strict EGL benchmark 失败，则更可能是系统图形栈或渲染设备问题。将这些情形分开，有助于避免把环境限制误写成策略算法失败，也能为后续修复 closed-loop benchmark 留出明确路径。
+
+	方法设计还需要考虑可复现交付。A-only 与 ABC checkpoint 都来自完整 150000-step 训练，结果文件记录相同的 evaluation script、splitD 数据路径和 checkpoint 路径。报告中引用的训练 L1、splitD L1、per-chunk 曲线和 frame-level distribution 均可从这些轻量结果重新生成图表。这样即使大体积 checkpoint 暂时通过云盘提供，正文中的关键数值仍能通过仓库内的 manifest 与 summary 文件进行交叉检查。
+
+	对 ACT 这类 chunk-based policy 而言，单个平均 L1 还不足以解释行为差异。因此方法部分预先规定了三层读数：整体 normalized/raw mean 用于回答 ABC 是否整体优于 A-only；chunk offset 曲线用于观察预测 horizon 变长时误差是否扩大；frame-level 分布用于检查高误差尾部是否被压低。Experiments 小节按照这三层顺序展示结果，Discussion 再解释训练 loss 与未见环境 L1 之间的反向趋势。
+
+	这一方法框架与 Topic 1 的统一渲染框架在结构上相似。Topic 1 先统一坐标、相机和资产格式，再比较不同 3D 表示在同一视频中的表现；Topic 2 先统一模型、训练预算和评测脚本，再比较不同训练环境覆盖在同一 splitD 指标下的表现。两条线都把主要变量限制到少数可解释因素上，从而让最终讨论能够分析现象来源，而不只是堆叠实验结果。
+
+	因此 Methods 小节的目标是把可比性条件写成明确协议。Topic 1 的协议是同一 Blender 世界坐标、同一 camera trajectory 和同一最终 render pass；Topic 2 的协议是同一 ACT 结构、同一训练步数、同一 splitD 评测脚本和同一统计字段。后续实验只在这些协议内解释数值和视觉现象。
+
+	\clearpage
+	\noindent
+	\begin{minipage}{\linewidth}
+		\centering
+		\begin{minipage}[t]{0.24\linewidth}
+			\centering
+			\includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/hamburger_it10000_validation.png}
+			\par\footnotesize object B validation
+		\end{minipage}
+		\hfill
+		\begin{minipage}[t]{0.24\linewidth}
+			\centering
+			\includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/hamburger_texture_kd.jpg}
+			\par\footnotesize object B texture
+		\end{minipage}
+		\hfill
+		\begin{minipage}[t]{0.24\linewidth}
+			\centering
+			\includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/objectC_training_strip.png}
+			\par\footnotesize object C strip
+		\end{minipage}
+		\hfill
+		\begin{minipage}[t]{0.24\linewidth}
+			\centering
+			\includegraphics[width=\linewidth,height=0.15\textheight,keepaspectratio]{final_report/objectC_texture_kd.jpg}
+			\par\footnotesize object C texture
+		\end{minipage}
+		\captionof{figure}{Generated Topic 1 assets used in the final fusion scene.}
+		\label{fig:topic1-generated-assets}
+	\end{minipage}
+	\vspace{1.2em}
+
+	\section{Experiments}
+
+	\subsection{Topic 1: 3D Reconstruction, Generation, and Fusion}
+
+	Topic 1 的实验分为三组：真实重建质量验证、生成式资产导出验证，以及最终融合渲染验证。第一组实验评估 counter 背景和 object A 的 3DGS 重建质量。与 7k smoke run 相比，counter 的 30k test PSNR 从 27.3455 提升到 29.2630，说明完整训练明显改善了背景的新视角渲染质量。object A 的 test PSNR 从 31.1154 小幅提升到 31.3322，表明真实物体在 7k 时已经基本收敛，但 30k 版本在 train PSNR 上继续提升，因此仍采用 30k 作为最终重建结果。图~\ref{fig:topic1-contact} 给出两者的 render-vs-GT contact sheet，说明真实背景和真实采集物体均达到可用于后续融合的重建质量。
+
+	counter 的 PSNR 提升幅度大于 object A，这与两个资产的采集条件相关。counter 来自成熟数据集，视角覆盖和相机标定更稳定，完整 30k 训练能持续改善背景细节；object A 来自手机环绕视频，受前景分割、背景残留和拍摄覆盖限制，7k 时已经较快达到可用质量。object A 30k train PSNR 继续上升，test PSNR 提升有限，提示模型对训练视角细节拟合更强。这个现象在融合阶段会转化为实际限制：当相机沿新的 orbit trajectory 观察时，训练视角外的点云或 mesh texture 仍可能出现不稳定。
+
+	图~\ref{fig:topic1-contact} 的作用不仅是展示图像好看，还用于确认后续融合有可靠输入。counter contact sheet 说明背景重建能支持桌面区域观察；object A contact sheet 说明真实采集路线可以保留物体主体外观。若这两个基础资产在 render-vs-GT 上已经明显失败，后续 Blender 融合即使能完成也缺少可信度。因此本报告把 PSNR 表与 contact sheet 放在前面，用它们作为后续三方式比较和融合视频的证据基础。
+
+	第二组实验验证生成式资产能否导出为 Blender 可用的 textured mesh。object B hamburger 使用 DreamFusion + Stable Diffusion 1.5，先完成 100-step smoke run 验证链路，再完成 10000-step full run 并导出 \texttt{obj+mtl+texture}。我们没有继续更换 prompt，因为 hamburger 已有完整 10000-step export，且语义上适合 counter 厨房台面。object C toy 使用 Stable Zero123，保留 600、3000 与 10000 iterations 对照；600-step 版本主要用于验证训练链路，3000-step 版本形状和纹理较稳定且具备完整 mesh/material/texture 导出包，10000-step 版本虽然训练更长，但未获得更清晰的可用 export，因此最终采用 3000-step 作为融合版本。生成式资产的验证图和导出纹理见图~\ref{fig:topic1-generated-assets}。
+
+	生成式资产的评价标准与真实重建不同。object B/C 没有真实多视角 GT，因此报告更关注三件事：主体是否语义可识别、导出的 mesh/material/texture 是否完整、进入 Blender 后是否能稳定放置。hamburger 的 10000-step 版本具备完整 export，并且颜色和形状在厨房 counter 场景中语义自然；object C 的 3000-step 版本在视觉稳定性和导出完整性之间更合适。10000-step 对照保留在视频和记录中，用于说明生成式 3D 训练更久并不必然带来更适合融合的 mesh。
+
+	图~\ref{fig:topic1-generated-assets} 同时展示 validation render 和 texture map，目的是分离 ``生成质量'' 和 ``资产可用性'' 两个问题。validation render 说明模型从某些角度能形成可识别主体，texture map 则说明它能被标准 mesh 渲染管线读取。最终融合要求二者同时满足：只看 validation 图不足以证明可融合，只导出材质文件也不足以证明视觉效果可接受。这个验证逻辑使 B/C 与 object A 的比较更公平，因为三条路线最终都被约束到可放入同一场景的资产形式。
+
+	\begin{table}[H]
+		\centering
+		\caption{Topic 1 three-way asset generation comparison.}
+		\label{tab:topic1-three-way}
+		\scriptsize
+		\setlength{\tabcolsep}{2.5pt}
+		\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.12\linewidth}>{\raggedright\arraybackslash}p{0.11\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.15\linewidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}p{0.12\linewidth}}
+			\toprule
+			Route & Asset & Geometry accuracy & Texture detail & Time / cost & Failure limits & Final form \\
+			\midrule
+			Real multi-view reconstruction & object A & Best physical consistency from real captured views; 30k test PSNR 31.3322. & Good under observed views; mesh texture depends on foreground cleanup and view coverage. & Highest manual cost: phone capture, frame extraction, COLMAP, 3DGS, dense meshing, texrecon. & Early point cloud/mesh contained background clutter; cleanup was required before texturing. & 3DGS point cloud + textured mesh. \\
+			Text-to-3D & object B hamburger & Recognizable global hamburger shape after DreamFusion 10000 iterations; local geometry can be soft. & Plausible generated texture exported with mesh; photo consistency is limited by SDS optimization. & No capture data; one 100-step smoke plus one 10000-step full run. & Prompt/seed sensitivity, SDS blur, and local artifacts can remain after export. & 10000-step textured mesh. \\
+			Single-image-to-3D & object C toy & Captures the main silhouette from one RGBA image; 3000 iterations selected for final placement. & Usable exported texture; quality depends strongly on crop, alpha matte, and input view prior. & Lowest data cost: image crop, alpha matte, Stable Zero123 training, mesh export. & 10000 iterations did not clearly improve visual quality, and no final mesh export was found for that run. & 3000-step textured mesh. \\
+			\bottomrule
+		\end{tabularx}
+	\end{table}
+
+	表~\ref{tab:topic1-three-way} 从几何真实性、纹理质量、人工成本和失败模式四个维度比较三类前景资产。真实多视角重建的质量上限高，但数据清理和 mesh 纹理化成本也最高；text-to-3D 的语义自由度最高，但几何和局部纹理更依赖 prompt、seed 与 SDS 优化稳定性；single-image-to-3D 的采集成本最低，但最依赖输入抠图质量和单图视角先验。这个对比说明三条路线是互补关系：它们提供的信息来源不同，也在最终融合中暴露出不同类型的视觉误差。
+
+	这张表也解释了为什么最终报告没有把三类资产简单排序。真实多视角路线适合需要保真度和可度量指标的物体，但它需要采集、注册和清理；text-to-3D 能快速得到没有真实样本的语义物体，但局部几何可信度弱；single-image-to-3D 在数据成本上最轻，但对输入视角和 alpha matte 的依赖最强。课程要求比较几何准确度、纹理细节和计算耗时，因此表格把 ``人工/数据成本'' 和 ``失败模式'' 与质量指标放在一起看。对于实际空间智能系统，低成本快速生成和高保真真实重建都有价值，选择取决于任务优先级。
+
+	第三组实验验证最终融合视频。完整视频为 300 帧、30 fps、10 秒、3114$\times$2076 分辨率。图~\ref{fig:topic1-orbit} 展示 counter orbit camera path 的 Blender 验证帧，说明相机动画可以沿共享轨迹观察背景；图~\ref{fig:topic1-fusion-keyframes} 展示最终融合视频的三张代表性关键帧。关键帧中可以同时看到 counter 背景、真实重建物体 A、DreamFusion hamburger 和 Stable Zero123 toy，并且三类前景资产在相机环绕过程中保持相对空间关系稳定。这说明四类资产已经被成功放入同一 Blender 世界坐标系下。最终视频仍保留一些可见局限，例如 counter mesh 的局部空洞/floater、暗部贴图不均匀，以及生成式 mesh 的局部纹理噪声；这些现象在 Discussion 中作为融合质量限制分析。
+
+	融合视频的验收重点是空间一致性和可复现路径。三张关键帧来自同一 300-frame trajectory 的不同时间点，能够检查前景资产是否在相机运动下保持相对位置关系。如果只是单张静态截图，物体可能在某一视角看似合理，但无法证明轨迹中的尺度、朝向和桌面接触关系稳定。通过 orbit frame 和 final fusion keyframe 的组合，报告同时展示了相机路径本身可用，以及多来源资产已经沿该路径合并渲染。
+
+	融合结果中的瑕疵同样具有分析价值。背景 floater 说明 3DGS/mesh 在训练视角之外仍有外推风险；object A 需要清理说明真实采集路线受背景混入影响；B/C 的噪声和偏色说明生成式 mesh 的材质与真实场景光照尚未完全一致。这些现象对应三方式比较表中的 failure limits，也为 Discussion 中的局限性提供了具体视觉证据。报告将这些问题公开写出，用于体现对方法边界的理解，并避免把融合视频包装成无缺陷结果。
+
+	\begin{figure}[H]
+		\centering
+		\begin{subfigure}[t]{0.48\linewidth}
+			\centering
+			\includegraphics[width=0.48\linewidth,height=0.12\textheight,keepaspectratio]{final_report/counter_orbit_frame_0000.png}
+			\includegraphics[width=0.48\linewidth,height=0.12\textheight,keepaspectratio]{final_report/counter_orbit_frame_0075.png}
+			\caption{Counter orbit camera validation.}
+			\label{fig:topic1-orbit}
+		\end{subfigure}
+		\hfill
+		\begin{subfigure}[t]{0.48\linewidth}
+			\centering
+			\includegraphics[width=0.32\linewidth,height=0.085\textheight,keepaspectratio]{final_report/fusion_frame_0075.png}
+			\includegraphics[width=0.32\linewidth,height=0.085\textheight,keepaspectratio]{final_report/fusion_frame_0150.png}
+			\includegraphics[width=0.32\linewidth,height=0.085\textheight,keepaspectratio]{final_report/fusion_frame_0225.png}
+			\caption{Selected final fusion keyframes.}
+			\label{fig:topic1-fusion-keyframes}
+		\end{subfigure}
+		\caption{Camera trajectory verification and final Topic 1 fusion video evidence.}
+	\end{figure}
+	\FloatBarrier
+	\noindent
+	\begin{minipage}{\linewidth}
+		\centering
+		\captionof{table}{Topic 2 ACT architecture, data, and training hyperparameters.}
+		\label{tab:topic2-hyperparams}
+		\vspace{0.3em}
+		\scriptsize
+		\resizebox{\linewidth}{!}{%
+			\begin{tabular}{llll}
+				\toprule
+				Group & Setting & Value & Source \\
+				\midrule
+				Model & Policy / backbone & ACT / ResNet18 ImageNet & Config + ACT dump \\
+				Transformer & Dim / heads / layers & 512 / 8 / encoder 4, decoder 1 & ACT dump \\
+				VAE and loss & Latent / KL / dropout & 32 / 10.0 / 0.1 & ACT dump \\
+				Observations & State / action dims & 15 / 7 & Training config \\
+				Images & Static / wrist shapes & $200{\times}200{\times}3$ / $84{\times}84{\times}3$ & Training config \\
+				Chunking & \texttt{chunk\_size} / \texttt{n\_action\_steps} & 100 / 100 & Training config \\
+				A-only data & Episodes / frames & 6089 / 366693 & A-only manifest \\
+				ABC data & Episodes / frames & 17870 / 1071743 & ABC manifest \\
+				Optimizer & Type / lr / weight decay & AdamW / $10^{-5}$ / $10^{-4}$ & Training config \\
+				Budget & Batch / steps / seed & 8 / 150000 / 20260529 & Config + manifests \\
+				Runtime & Observed s/step & A-only 0.106493 / ABC 0.106954 & Run manifests \\
+				Loader & Workers / prefetch / persistent & 16 / 4 / true & Run manifests \\
+				Logging & WandB runs & cnfwf30s / eysfzlqn & Run manifests \\
+				\bottomrule
+			\end{tabular}%
+		}
+	\end{minipage}
+
+	\vspace{1.0em}
+	\noindent
+	\begin{minipage}{\linewidth}
+		\centering
+		\captionof{table}{A-only vs ABC on environment D open-loop Action L1. Lower is better.}
+		\label{tab:topic2-d-l1}
+		\vspace{0.3em}
+		\scriptsize
+		\resizebox{\linewidth}{!}{%
+			\begin{tabular}{llrrrrll}
+				\toprule
+				Model & Training data & Steps & D norm. L1 & D raw L1 & Frame p95 & Closed-loop & Source result \\
+				\midrule
+				A-only & splitA & 150000 & 0.658629 & 0.193360 & 1.062686 & Smoke only & Day6 A-only distribution \\
+				ABC & splitA+splitB+splitC & 150000 & 0.577993 & 0.168696 & 0.972841 & Smoke only & Day6 ABC distribution \\
+				ABC rel. reduction & vs A-only & -- & 12.24\% & 12.76\% & 8.45\% & -- & Day6 robustness summary \\
+				\bottomrule
+			\end{tabular}%
+		}
+	\end{minipage}
+	\vspace{1.2em}
+
+	\subsection{Topic 2: ACT Training and CALVIN Rollout}
+
+	Topic 2 的正式比较使用相同 ACT 结构和相同 150000 gradient steps。A-only 使用 splitA 训练，ABC 使用 splitA/B/C 训练；两者共享网络结构、优化器、随机种子、动作分块长度和 DataLoader 配置，完整超参见表~\ref{tab:topic2-hyperparams}。A-only 与 ABC 的正式训练 manifest 均为 \texttt{status=completed}，observed wall-clock speed 分别为 0.106493 s/step 和 0.106954 s/step，因此报告按约 0.106--0.107 s/step 记录训练耗时。A-only 最终训练 action L1 为 0.0813，ABC 最终训练 action L1 为 0.1567；该数值用于说明训练收敛状态，最终泛化结论以 splitD 离线评测为准。
+
+	训练曲线的解释需要结合数据分布。A-only 只拟合 splitA，因此视觉背景、物体布局和动作分布更集中，训练 action L1 更低是合理现象。ABC 同时覆盖 A/B/C，训练样本更多样，模型在同样步数内需要拟合更宽的条件分布，因此训练 action L1 更高。这个差异本身不代表 ABC 欠拟合到不可用，因为最终问题是 D 环境泛化；它提示我们不能把训练 loss 当作唯一指标。正式结论必须回到 splitD open-loop Action L1。
+
+	表~\ref{tab:topic2-hyperparams} 的作用是锁定比较条件。两条路线共享 ACT/ResNet18 结构、optimizer、learning rate、weight decay、batch size、chunk size 和 random seed。ABC 的优势因此不能归因于模型更大、训练步数更多或优化器不同，而主要来自训练环境覆盖范围更广。报告保留 observed s/step，是为了说明两条训练运行在工程开销上也接近，避免把系统吞吐差异误读成算法差异。
+
+	环境 D zero-shot 主指标采用 open-loop Action L1。评测脚本覆盖 5124 条 episode 和 308918 帧，构造与 ACT 训练一致的 100 步 future action chunk，并在有效动作元素上计算平均 L1。表~\ref{tab:topic2-d-l1} 给出完整比较。ABC 在 normalized action space 中从 0.6586 降至 0.5780，相对降低 12.24\%；raw action units 从 0.1934 降至 0.1687，相对降低 12.76\%。正式 closed-loop benchmark 受 strict NVIDIA EGL 图形栈限制，因此表中 closed-loop 栏记录为 smoke evidence；direct-cameras smoke 显示两条策略链路均能输出 7 维动作并推动 TCP 移动，其中 A-only 为 60 steps、max TCP delta 0.264235，ABC 为 60 steps、max TCP delta 0.135650。
+
+	splitD 结果与训练结果形成关键对照。A-only 在训练集上更低，但在 D 上 normalized/raw L1 都更高，说明它对单环境训练分布拟合更强，面对新环境视觉变化时误差上升。ABC 在训练阶段承担更复杂的数据分布，最终在 D 上取得更低 L1，说明多环境训练改善了跨环境动作预测。这种趋势也和 CALVIN 的设计一致：环境 D 与 A/B/C 在视觉布局上存在差异，模型若只依赖单环境视觉线索，容易在 D 中出现动作偏移。
+
+	raw Action L1 的同步下降为 normalized 指标提供了额外支持。normalized space 中 12.24\% 的相对降低可能受到 normalizer 尺度影响，因此报告同时给出 raw action units 下 12.76\% 的降低。两种 metric space 得到一致方向，说明 ABC 的优势不是 normalization artifact。frame p95 的降低则说明改进不只发生在平均误差上，也减少了高误差尾部。
+
+	\FloatBarrier
+	\vspace{0.4em}
+	\noindent
+	\begin{minipage}[t]{0.49\linewidth}
+		\centering
+		\includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_train_action_l1_curve.png}
+		\captionof{figure}{Training action L1 curves for the comparable-budget A-only and ABC ACT runs.}
+		\label{fig:topic2-train-action-l1}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[t]{0.49\linewidth}
+		\centering
+		\includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_splitD_action_l1_bar.png}
+		\captionof{figure}{Environment D open-loop Action L1 comparison in normalized and raw action spaces.}
+		\label{fig:topic2-splitd-bar}
+	\end{minipage}
+	\vspace{0.6em}
+
+	图~\ref{fig:topic2-train-action-l1} 给出两条 comparable-budget run 的训练 action L1 曲线；图~\ref{fig:topic2-splitd-bar} 展示 splitD normalized/raw Action L1 的主对比。两条训练曲线来自 A-only/ABC run manifests 和训练日志，splitD 柱状图来自 Day5/Day6 open-loop evaluation results。训练损失用于判断优化过程，跨环境结论以 splitD 全量 open-loop Action L1 为准。
+
+	这两张图放在一起强调了 ``优化表现'' 与 ``泛化表现'' 的区别。训练曲线中 A-only 更低，说明单环境训练更容易压低 supervised L1；柱状图中 ABC 更低，说明面对未见环境时多环境训练更稳。若只看训练曲线，容易误判 A-only 为更优策略；若只看 splitD 柱状图，又会忽略 ABC 在训练阶段的任务更难。二者结合起来，才能支撑报告的核心解释：ABC 用更高训练误差换取了更好的跨环境泛化。
+
+	\FloatBarrier
+	\vspace{0.4em}
+	\noindent
+	\begin{minipage}[t]{0.49\linewidth}
+		\centering
+		\includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_splitD_per_chunk_l1.png}
+		\captionof{figure}{splitD normalized Action L1 by ACT chunk offset.}
+		\label{fig:topic2-per-chunk}
+	\end{minipage}
+	\hfill
+	\begin{minipage}[t]{0.49\linewidth}
+		\centering
+		\includegraphics[width=\linewidth,height=0.20\textheight,keepaspectratio]{topic2_splitD_error_distribution.png}
+		\captionof{figure}{splitD per-frame action-chunk mean L1 distribution for A-only and ABC.}
+		\label{fig:topic2-error-distribution}
+	\end{minipage}
+	\vspace{0.6em}
+
+	图~\ref{fig:topic2-per-chunk} 展示 chunk 内不同 future-action offset 的误差变化。A-only 的 normalized L1 从前 10 个 offset 的 0.6023 上升到 offset 25--34 的 0.6955，再上升到 offset 55--64 的 0.8246；ABC 的对应数值为 0.5192、0.6236 和 0.7095。最末有效 offset 64 上，A-only 为 0.8331，ABC 为 0.7357。ABC 在所有有效 offset 上保持更低误差，说明额外 B/C 视觉布局提升了环境 D 视觉偏移下的动作预测鲁棒性。offset 统计来自 Day6 robustness summary。
+
+	帧级误差分布进一步支持上述结论。图~\ref{fig:topic2-error-distribution} 比较 splitD 每帧有效 action chunk mean L1 的分布；两组评测的分布计数都等于 308918 帧。A-only 的帧级 median / p75 / p95 分别为 0.6132 / 0.7888 / 1.0627，ABC 为 0.5211 / 0.7004 / 0.9728；p95 相对降低 8.45\%。结构化统计来自 Day6 robustness JSON/CSV/MD summaries。
+
+	per-chunk 曲线说明误差会随预测 horizon 变长而上升，这符合 action chunking 的直觉：越靠后的 future action 受到当前观测不确定性和累计误差影响越大。关键在于 ABC 在 early、mid、late offset 上都保持更低 L1，领先并非集中在某个局部 offset。frame-level distribution 则从另一个角度说明改进稳定存在：median、p75、p95 同时下降，表示 ABC 不仅改善典型帧，也缓解了较难帧的尾部误差。这一点对机器人策略尤其重要，因为少量高误差动作可能在 closed-loop 中放大为任务失败。
+
+	\FloatBarrier
+
+	\section{Discussion}
+
+	Topic 1 的核心工程问题是如何把高斯/点云、显式 mesh、纹理图和相机轨迹放入同一条渲染链路。我们的主路线以 \texttt{counter} 的 COLMAP/3DGS 坐标系为世界坐标基准：先用 3DGS 验证 \texttt{counter} 和 object A 的新视角质量，再通过 COLMAP dense reconstruction、mesh reconstruction 和 texrecon 得到 Blender 可读的 textured mesh；object B 和 object C 则直接采用 threestudio 导出的 \texttt{obj+mtl+texture}。进入 Blender 后，所有资产共享同一条 counter orbit camera trajectory，通过 scale、rotation、translation 和 material 检查完成空间对齐，并以同一相机动画输出融合视频。这个方案牺牲了一部分 3DGS 原生渲染质量，换来了统一场景编辑、统一相机轨迹和统一视频导出的可控性。
+
+	除了主路线，融合也可以保留同轨迹双 pass 策略。对于仍适合保留为 3DGS Gaussian 或点云的资产，可以先在 3DGS 渲染器中按 Blender 导入的 camera trajectory 渲染背景/高斯 pass，再在 Blender 中渲染 mesh pass，最后用 alpha 或 depth-aware compositing 合成。这个备选路线的优点是减少 mesh 化带来的几何和纹理损失；代价是需要更严格的相机内外参一致性、深度尺度一致性和遮挡处理。对于 object A 这类真实采集资产，实践上还可以在双 pass 前做点云清理，或在进入 Blender 前完成 mesh 化与纹理化，使同一物体能在 ``高斯质量验证'' 和 ``mesh 场景融合'' 两个层面各自发挥优势。
+
+	当前融合质量的局限主要来自表示转换和训练视角外推。背景 \texttt{counter} 在原始测试视角下有 29.2630 test PSNR，但 orbit trajectory 会进入训练视角之外的区域，因此在新视角下仍会出现 floater、局部空洞和暗部贴图不均匀。\verb|object_A train/test PSNR| 对比也暴露了同类问题：30k train PSNR 为 37.7307，test PSNR 为 31.3322，二者差距说明稀疏视角真实重建对训练视角拟合更强，外推到新相机或 mesh 化后会暴露背景残留与纹理重建误差。B/C 的 DreamFusion 与 Stable Zero123 mesh 能提供语义可识别的前景物体，但局部几何噪声、贴图拉伸、偏色和偏暗会在统一光照与相机运动下被放大。最终视频已经完成统一表示和合并渲染，但其视觉质量仍受这些工程转换损失限制，后续改进应优先放在前景 mask、点云/mesh 清理、纹理重建和曝光匹配上。
+
+	这些局限不会削弱 ``统一表示并合并渲染'' 的完成性，反而帮助界定当前方案的适用范围。若目标是实时高质量新视角合成，保留 3DGS 原生渲染并做 depth-aware composition 可能更合适；若目标是课程交付中的统一场景、统一相机和统一视频，mesh 化后进入 Blender 更直接。当前结果选择后者，因此质量下降主要来自工程转换，不能被直接视作单个资产完全失败。报告把这一区分写清楚，用于避免把融合视频中的 floater 或偏色误读为整条资产生成链路无效。
+
+	Topic 1 的另一个启示是，三类资产的误差来源彼此不同。object A 的误差来自采集和重建过程，解决路径是更好的 foreground mask、更多视角、更干净的点云和更稳定的 texrecon；object B 的误差来自 SDS 优化和文本先验，解决路径是 prompt 调整、seed 选择或更强生成模型；object C 的误差来自单图视角先验和 alpha matte，解决路径是更规范的主体裁剪和多视图补充。把这些误差放入同一场景后，它们会以不同形式出现，因此 Discussion 不把融合质量简单归因于某一个模块，而是分解到表示、数据和渲染三个层面。
+
+	Topic 2 的核心现象是训练损失与跨环境泛化出现反转。A-only 的最终训练 action L1 为 0.0813，低于 ABC 的 0.1567，说明单环境 splitA 训练更容易拟合自身视觉布局和动作分布；但在未见 splitD 上，A-only normalized open-loop Action L1 为 0.6586，ABC 为 0.5780，raw Action L1 也从 0.1934 降到 0.1687。这个反转支持多环境训练的泛化解释：ABC 在 splitA/B/C 中见过更多背景、物体布局和视觉扰动，训练误差更高，但学到的动作预测函数对环境 D 的视觉偏移更稳。chunk-offset 曲线和 frame-level p95 进一步支持该结论，ABC 在所有有效 offset 上保持更低误差，p95 从 1.0627 降到 0.9728。
+
+	open-loop Action L1 是本阶段 Topic 2 的主指标，原因是它覆盖完整 splitD 的 5124 episodes 和 308918 frames，并且只依赖离线数据、checkpoint、normalizer 和前向推理。strict EGL 路线受服务器图形栈限制，closed-loop success rate 暂时无法稳定作为正式 benchmark；direct-cameras 结果只用于证明策略链路能输出 7 维动作并推动 TCP 移动。相比之下，全量 open-loop L1 不依赖 PyBullet/EGL 仿真图形栈，样本数固定、metric space 明确、A-only/ABC 可在同一脚本下重复比较，因此是有依据的方法选择。A-only 与 ABC 的公平性来自同结构、同超参、同训练步数：两者共享 ACT/ResNet18 结构、150000 gradient steps、batch size、learning rate、optimizer、seed、chunk size 和 normalization 逻辑，主要差异限定为训练环境覆盖范围。
+
+	Topic 2 的限制也需要明确。open-loop L1 衡量的是在数据集观测条件下预测动作与专家动作的接近程度，它不能直接等价于 long-horizon task success。ACT 在 closed-loop 中还会受到 compounding error、相机延迟、仿真随机性和环境 reset 状态影响。由于 strict EGL 条件无法稳定提供正式 closed-loop benchmark，本报告没有声称 ABC 的 success rate 已经完整验证。更稳妥的表述是：在全量 splitD 离线动作预测上，ABC 明确优于 A-only；direct-cameras smoke 说明策略链路可执行，但仍需要后续系统图形栈修复后再跑标准 CALVIN rollout。
+
+	从评分角度看，本报告的深度分析集中在两个可核验现象上。Topic 1 说明了三种 3D 资产路线如何统一到 Blender 渲染链路，并诚实解释融合质量下降的来源；Topic 2 说明了训练 loss 和未见环境 L1 的反转，以及为什么 ABC 的更高训练误差可以对应更好的泛化。两条线都避免只展示最终结果，而是把方法选择、失败模式和指标边界写入正文。这些分析共同支撑最终结论：工程链路已经闭合，主要剩余问题来自表示转换质量和 closed-loop 图形栈限制。
+
+	\section{Conclusion}
+
+	本报告完成 Week4 Day5 的完整报告 v1 收口。Topic 1 交付 counter/object A 7k/30k PSNR、DreamFusion 10000-step object B、Stable Zero123 3000-step object C、三方式对比表、融合视频关键帧，以及高斯/点云与 mesh 的统一渲染策略；Topic 2 交付 150k 同步训练设置、0.106--0.107 s/step manifest 耗时、splitD Action L1、chunk-offset 鲁棒性、frame-level p95、EGL/direct-cameras 评测边界和 A-only/ABC 泛化解读。当前证据支持两个结论：多来源 3D 融合已经形成可复现工程闭环，但视觉质量受表示转换和生成式资产质量限制；ACT 的多环境 ABC 训练在未见环境 D 上显著优于 A-only，normalized Action L1 相对降低 12.24\%。
+
+	最终交付入口分为仓库和云盘两部分。GitHub 仓库为 \href{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence}{HW3-DL-Spatial-Intelligence}，其中 \texttt{README.md} 提供环境配置、数据准备、Topic 1 渲染/融合命令、Topic 2 训练/评测命令和报告源码入口；报告图表位于 \texttt{reports/figures/}，LaTeX 源文件位于 \texttt{reports/main.tex}。大体积权重、mesh、视频和最终 Blender 场景通过 Baidu Netdisk 提供，云盘包包含 Topic 2 的 A-only/ABC final policies、splitD 评测摘要、Topic 1 的 counter/object A \texttt{.ply}、四类导出 mesh/texture、最终 Blender 场景和 300 帧融合视频。该链接和提取码也已放在首页明显位置，便于助教直接下载核验。
+
+	\begin{center}
+		\small
+		\begin{tabularx}{0.96\linewidth}{@{}p{0.18\linewidth}X@{}}
+			\toprule
+			GitHub & \href{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence}{https://github.com/Zhuyy66/HW3-DL-Spatial-Intelligence} \\
+			Baidu Netdisk & \href{https://pan.baidu.com/s/1WNUytEJB6iWO8gU2to5lOA?pwd=quw1}{https://pan.baidu.com/s/1WNUytEJB6iWO8gU2to5lOA?pwd=quw1} \\
+			Extraction code & \textbf{quw1} \\
+			\bottomrule
+		\end{tabularx}
+	\end{center}
+
+	\nocite{*}
+	\FloatBarrier
+	\bibliographystyle{plainnat}
+	\bibliography{reports/references}
+
+	\end{document}
